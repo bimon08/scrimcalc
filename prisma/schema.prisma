@@ -12,14 +12,16 @@ datasource db {
 }
 
 model User {
-  id          String   @id @default(uuid())
-  email       String   @unique
-  name        String?
-  image       String?
-  rules       String[] @default([])
-  sharedCodes String[] @default([]) @map("shared_codes")
-  createdAt   DateTime @default(now()) @map("created_at")
-  wallets     Wallet[]
+  id              String    @id @default(uuid())
+  email           String    @unique
+  name            String?
+  image           String?
+  role            String    @default("USER")       // "ADMIN" or "USER"
+  subscriptionEnd DateTime? @map("subscription_end") // null = no active subscription
+  rules           String[]  @default([])
+  sharedCodes     String[]  @default([]) @map("shared_codes")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  wallets         Wallet[]
   savedTournaments SavedTournament[]
 
   @@map("users")

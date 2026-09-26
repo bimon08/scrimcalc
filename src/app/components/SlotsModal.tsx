@@ -148,19 +148,52 @@ export default function SlotsModal({ tournament, groupFilter, setGroupFilter, on
   const handleShare = useCallback(async () => {
     setSharing(true); setShareOk(false);
     try {
-      const dataUrl = await captureContent(); if (!dataUrl) return;
+      const dataUrl = await captureContent();
+      if (!dataUrl) { toast.error("Capture failed"); return; }
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], `${tournament.name || "slots"}.jpg`, { type: "image/jpeg" });
+
+      // 1. Try native share (mobile)
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: tournament.name || "Slots" });
         setShareOk(true); setTimeout(() => setShareOk(false), 2500); return;
       }
+
+      // 2. Try clipboard write (image/png has better browser support than image/jpeg)
       if (navigator.clipboard && window.ClipboardItem) {
-        await navigator.clipboard.write([new window.ClipboardItem({ "image/jpeg": blob })]);
-        setShareOk(true); toast.success("Copied!"); setTimeout(() => setShareOk(false), 2500); return;
+        try {
+          // Convert to PNG for clipboard (Chrome only supports image/png in clipboard)
+          const img = new Image();
+          const pngBlob = await new Promise<Blob>((resolve, reject) => {
+            img.onload = () => {
+              const canvas = document.createElement("canvas");
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext("2d")!;
+              ctx.drawImage(img, 0, 0);
+              canvas.toBlob((b) => b ? resolve(b) : reject(new Error("toBlob failed")), "image/png");
+            };
+            img.onerror = reject;
+            img.src = dataUrl;
+          });
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
+          setShareOk(true); toast.success("Copied!"); setTimeout(() => setShareOk(false), 2500); return;
+        } catch (clipErr) {
+          console.warn("[SHARE] Clipboard write failed, falling back to download:", clipErr);
+        }
       }
-      toast.error("Use Download instead");
-    } catch (e: unknown) { if ((e as Error).name !== "AbortError") toast.error("Share failed"); }
+
+      // 3. Fallback — trigger download
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `${tournament.name || "slots"}.jpg`;
+      a.click();
+      toast.success("Downloaded!");
+      setShareOk(true); setTimeout(() => setShareOk(false), 2500);
+    } catch (e: unknown) {
+      console.error("[SHARE] error:", e);
+      if ((e as Error).name !== "AbortError") toast.error("Share failed — try Download instead");
+    }
     finally { setSharing(false); }
   }, [captureContent, tournament.name]);
 

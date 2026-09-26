@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
-import { LogOut, Key, Copy, Check, ChevronRight } from "lucide-react";
+import { LogOut, Key, Copy, Check, ChevronRight, Sparkles, Crown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authFetch } from "@/lib/authFetch";
@@ -36,6 +36,33 @@ export default function ProfilePage() {
 
   if (!session) return null;
 
+  // Subscription info from session
+  const role = (session.user as { role?: string })?.role ?? "USER";
+  const subEnd = (session.user as { subscriptionEnd?: string | null })?.subscriptionEnd;
+  const isAdmin = role === "ADMIN";
+
+  let subLabel = "";
+  let subColor = "";
+  let daysLeft: number | null = null;
+
+  if (isAdmin) {
+    subLabel = "Admin · Unlimited";
+    subColor = "#fbbf24";
+  } else if (subEnd) {
+    const end = new Date(subEnd);
+    daysLeft = Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (daysLeft > 0) {
+      subLabel = `${daysLeft} day${daysLeft !== 1 ? "s" : ""} remaining`;
+      subColor = daysLeft <= 3 ? "#f97316" : "#4ade80";
+    } else {
+      subLabel = "Expired";
+      subColor = "#ef4444";
+    }
+  } else {
+    subLabel = "No subscription";
+    subColor = "#ef4444";
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 pb-24">
       <div className="px-4 pt-10 pb-6 flex flex-col items-center gap-3">
@@ -53,6 +80,29 @@ export default function ProfilePage() {
       </div>
 
       <div className="px-4 space-y-3">
+        {/* Subscription Status */}
+        <div
+          className="w-full flex items-center gap-3 py-3.5 px-4 rounded-xl text-sm font-semibold"
+          style={{
+            background: isAdmin ? "rgba(251,191,36,0.08)" : subColor === "#4ade80" ? "rgba(74,222,128,0.08)" : subColor === "#f97316" ? "rgba(249,115,22,0.08)" : "rgba(239,68,68,0.08)",
+            border: `1px solid ${isAdmin ? "rgba(251,191,36,0.2)" : subColor === "#4ade80" ? "rgba(74,222,128,0.2)" : subColor === "#f97316" ? "rgba(249,115,22,0.2)" : "rgba(239,68,68,0.2)"}`,
+          }}
+        >
+          {isAdmin ? (
+            <Crown className="h-4 w-4" style={{ color: "#fbbf24" }} />
+          ) : (
+            <Sparkles className="h-4 w-4" style={{ color: subColor }} />
+          )}
+          <div className="flex-1">
+            <span style={{ color: subColor }}>{subLabel}</span>
+            {!isAdmin && subEnd && daysLeft !== null && daysLeft > 0 && (
+              <p className="text-[10px] text-zinc-500 mt-0.5">
+                Expires {new Date(subEnd).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+              </p>
+            )}
+          </div>
+        </div>
+
         {/* Sync Key */}
         <button
           onClick={fetchSyncKey}
