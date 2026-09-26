@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { X, MessageCircle, Sparkles, LogIn } from "lucide-react";
+import { X, Sparkles, LogIn, Check } from "lucide-react";
 
 interface Props {
   userName?: string | null;
@@ -10,10 +11,18 @@ interface Props {
   onClose: () => void;
 }
 
+const PLANS = [
+  { id: "1w", duration: "1 Week", price: "₹50", popular: false, badge: "" },
+  { id: "1m", duration: "1 Month", price: "₹150", popular: true, badge: "POPULAR" },
+  { id: "1y", duration: "1 Year", price: "₹1,500", popular: false, badge: "BEST VALUE" },
+];
+
 export default function SubscriptionNudge({ userName, userEmail, isLoggedIn = true, onClose }: Props) {
-  const whatsappLink = `https://wa.me/918837011018?text=${encodeURIComponent(
-    `Hi, I'd like to subscribe to ScrimCalc.\nName: ${userName ?? "—"}\nEmail: ${userEmail ?? "—"}`
-  )}`;
+  const [selectedPlanId, setSelectedPlanId] = useState("1m");
+  const selectedPlan = PLANS.find((p) => p.id === selectedPlanId) || PLANS[1];
+
+  const whatsappMessage = `Hi, I'd like to subscribe to ScrimCalc.\n\nName: ${userName ?? "—"}\nEmail: ${userEmail ?? "—"}\nPlan: ${selectedPlan.duration} (${selectedPlan.price})\n\nPlease send the payment details.`;
+  const whatsappLink = `https://wa.me/918837011018?text=${encodeURIComponent(whatsappMessage)}`;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center" onClick={onClose}>
@@ -60,38 +69,65 @@ export default function SubscriptionNudge({ userName, userEmail, isLoggedIn = tr
               <div className="mx-auto h-14 w-14 rounded-xl flex items-center justify-center mb-3" style={{ background: "linear-gradient(135deg,rgba(124,58,237,0.3),rgba(168,85,247,0.2))" }}>
                 <Sparkles className="h-7 w-7 text-violet-400" />
               </div>
-              <h2 className="text-lg font-black text-white">Free Trial Ended</h2>
-              <p className="text-xs mt-1.5" style={{ color: "rgba(167,139,250,0.55)" }}>
-                Your 7-day free trial has ended. Subscribe to save changes, add teams, and sync data.
+              <h2 className="text-lg font-black text-white">Choose Your Plan</h2>
+              <p className="text-xs mt-1.5" style={{ color: "rgba(167,139,250,0.65)" }}>
+                Select a plan to subscribe and activate unlimited access.
               </p>
             </div>
 
-            {/* Plans */}
-            <div className="space-y-1.5">
-              {[
-                { duration: "1 Week", price: "₹50" },
-                { duration: "1 Month", price: "₹150", popular: true },
-                { duration: "1 Year", price: "₹1,500", badge: "BEST VALUE" },
-              ].map((plan) => (
-                <div
-                  key={plan.duration}
-                  className="flex items-center justify-between px-3.5 py-2.5 rounded-xl"
-                  style={{
-                    background: plan.popular ? "rgba(124,58,237,0.15)" : "rgba(255,255,255,0.03)",
-                    border: `1px solid ${plan.popular ? "rgba(124,58,237,0.35)" : "rgba(255,255,255,0.06)"}`,
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-white">{plan.duration}</span>
-                    {(plan.popular || plan.badge) && (
-                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: plan.badge ? "rgba(37,211,102,0.2)" : "rgba(124,58,237,0.3)", color: plan.badge ? "#4ade80" : "#c4b5fd" }}>
-                        {plan.badge || "POPULAR"}
+            {/* Plans List */}
+            <div className="space-y-2">
+              {PLANS.map((plan) => {
+                const isSelected = plan.id === selectedPlanId;
+                return (
+                  <button
+                    key={plan.id}
+                    type="button"
+                    onClick={() => setSelectedPlanId(plan.id)}
+                    className="w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition-all text-left cursor-pointer active:scale-[0.98]"
+                    style={{
+                      background: isSelected
+                        ? "linear-gradient(135deg, rgba(124,58,237,0.25), rgba(168,85,247,0.18))"
+                        : "rgba(255,255,255,0.03)",
+                      border: isSelected
+                        ? "1.5px solid #a855f7"
+                        : "1px solid rgba(255,255,255,0.07)",
+                      boxShadow: isSelected ? "0 0 16px rgba(168,85,247,0.25)" : "none",
+                    }}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {/* Selection radio check */}
+                      <div
+                        className="w-4 h-4 rounded-full flex items-center justify-center transition-all"
+                        style={{
+                          background: isSelected ? "#a855f7" : "transparent",
+                          border: isSelected ? "1.5px solid #c084fc" : "1.5px solid rgba(167,139,250,0.35)",
+                        }}
+                      >
+                        {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
+                      </div>
+
+                      <span className={`text-sm font-bold ${isSelected ? "text-white" : "text-violet-200"}`}>
+                        {plan.duration}
                       </span>
-                    )}
-                  </div>
-                  <span className="text-sm font-black text-violet-400">{plan.price}</span>
-                </div>
-              ))}
+
+                      {(plan.popular || plan.badge) && (
+                        <span
+                          className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider"
+                          style={{
+                            background: plan.badge === "BEST VALUE" ? "rgba(37,211,102,0.2)" : "rgba(124,58,237,0.35)",
+                            color: plan.badge === "BEST VALUE" ? "#4ade80" : "#c4b5fd",
+                            border: `1px solid ${plan.badge === "BEST VALUE" ? "rgba(37,211,102,0.35)" : "rgba(168,85,247,0.4)"}`,
+                          }}
+                        >
+                          {plan.badge || "POPULAR"}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-sm font-black text-violet-300">{plan.price}</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* WhatsApp CTA */}
@@ -99,15 +135,20 @@ export default function SubscriptionNudge({ userName, userEmail, isLoggedIn = tr
               href={whatsappLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white active:scale-95 transition-all"
-              style={{ background: "linear-gradient(135deg,#25d366,#128C7E)", boxShadow: "0 4px 20px rgba(37,211,102,0.25)" }}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white active:scale-95 transition-all hover:brightness-110"
+              style={{
+                background: "linear-gradient(135deg,#25d366,#128C7E)",
+                boxShadow: "0 4px 20px rgba(37,211,102,0.3)",
+              }}
             >
-              <MessageCircle className="h-4 w-4" />
-              Subscribe via WhatsApp
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+              </svg>
+              <span>Subscribe for {selectedPlan.price} via WhatsApp</span>
             </a>
 
-            <p className="text-[10px] text-center" style={{ color: "rgba(167,139,250,0.25)" }}>
-              Pay via GPay / Cash · Activated within minutes
+            <p className="text-[10px] text-center" style={{ color: "rgba(167,139,250,0.35)" }}>
+              Pay via GPay / UPI · Activated within minutes
             </p>
           </>
         )}
