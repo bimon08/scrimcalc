@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Clipboard, ClipboardPaste, ChevronDown, ChevronUp, Trophy, Crosshair, Target } from "lucide-react";
 import { toast } from "sonner";
 import { Tournament, GeminiOutput, AssignedGroup } from "@/lib/types";
-import { loadTournament, saveTournament } from "@/lib/storage";
+import { authFetch } from "@/lib/authFetch";
 import { generatePrompt } from "@/lib/prompt";
 
 export default function StatsPage() {
@@ -15,24 +15,34 @@ export default function StatsPage() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const t = loadTournament();
-    setTournament(t);
-    if (t?.geminiData) {
-      setGroups(
-        t.geminiData.groups.map((g) => ({
-          ...g,
-          teamId: t.assignments?.[g.group],
-          teamName: t.teams.find((tm) => tm.id === t.assignments?.[g.group])?.name,
-        }))
-      );
-      setAssignments(t.assignments || {});
-      setMatchesDetected(t.geminiData.matches_detected);
-    }
+    authFetch("/api/tournaments")
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        if (!json?.tournaments?.length) return;
+        const t = json.tournaments[0] as Tournament;
+        setTournament(t);
+        if (t?.geminiData) {
+          setGroups(
+            t.geminiData.groups.map((g) => ({
+              ...g,
+              teamId: t.assignments?.[g.group],
+              teamName: t.teams.find((tm) => tm.id === t.assignments?.[g.group])?.name,
+            }))
+          );
+          setAssignments(t.assignments || {});
+          setMatchesDetected(t.geminiData.matches_detected);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const save = useCallback((t: Tournament) => {
     setTournament(t);
-    saveTournament(t);
+    authFetch("/api/tournaments", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tournaments: [t] }),
+    }).catch(() => {});
   }, []);
 
   const copyPrompt = () => {

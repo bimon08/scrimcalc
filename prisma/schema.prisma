@@ -18,6 +18,7 @@ model User {
   image           String?
   role            String    @default("USER")       // "ADMIN" or "USER"
   subscriptionEnd DateTime? @map("subscription_end") // null = no active subscription
+  pendingPlanDays Int?       @map("pending_plan_days") // admin-assigned plan waiting for user to activate
   rules           String[]  @default([])
   sharedCodes     String[]  @default([]) @map("shared_codes")
   createdAt       DateTime  @default(now()) @map("created_at")

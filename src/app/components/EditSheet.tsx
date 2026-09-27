@@ -36,7 +36,7 @@ export default function EditSheet({
     },
     ...(tournament.geminiData ? [{
       icon: <ListChecks className="h-5 w-5" />, label: "Edit Points",
-      action: () => { if (onEditPoints) { onClose(); onEditPoints(); } }
+      action: () => { if (onEditPoints) onEditPoints(); }
     }] : []),
 
     {

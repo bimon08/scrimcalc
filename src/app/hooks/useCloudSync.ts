@@ -1,35 +1,25 @@
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { Team, Tournament } from "@/lib/types";
-import {
-  loadTournaments, saveTournaments,
-  getDeletedTournamentIds, syncPastTeamsFromTournaments,
-} from "@/lib/storage";
+import { Tournament } from "@/lib/types";
+import { syncPastTeamsFromTournaments } from "@/lib/storage";
 import type { PastTeam } from "@/lib/storage";
 import { authFetch } from "@/lib/authFetch";
 
-/**
- * Merge two team arrays by ID with field-level conflict resolution.
- * @param dropOtherOnly - if true, teams that exist ONLY in `other` are dropped
- *   (used for owned tournaments where local deletions are intentional).
- *   For shared tournaments, pass false to always keep all teams (union merge).
- */
-function mergeTeams(base: Team[], other: Team[], dropOtherOnly: boolean): Team[] {
-  const baseMap  = new Map(base.map(t => [t.id, t]));
-  const otherMap = new Map(other.map(t => [t.id, t]));
-  const result: Team[] = [];
-  for (const t of base) {
-    const o = otherMap.get(t.id);
-    if (!o) { result.push(t); continue; }
-    result.push({ ...o, ...t, phone: t.phone || o.phone || undefined, players: (t.players?.length ? t.players : o.players) ?? [] });
-  }
-  if (!dropOtherOnly) {
-    for (const [id, t] of otherMap) {
-      if (!baseMap.has(id)) result.push(t);
-    }
-  }
-  return result;
+const CACHE_KEY = "bgmi-tournaments-cache";
+
+/** Read-only cache — used only for instant initial render while API loads */
+function readCache(): Tournament[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? (JSON.parse(raw) as Tournament[]) : [];
+  } catch { return []; }
+}
+
+/** Write cache — called after successful API responses */
+function writeCache(tournaments: Tournament[]): void {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(tournaments)); } catch { /* quota exceeded, ignore */ }
 }
 
 export type SyncStatus = 'idle' | 'pending' | 'syncing' | 'offline' | 'synced' | 'unauthed';
@@ -54,233 +44,210 @@ export function useCloudSync(): SyncResult {
   const [pastTeams, setPastTeams] = useState<PastTeam[]>([]);
   const [pageLoaded, setPageLoaded] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
-  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const syncInProgress = useRef(false);
+  const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pushInProgress = useRef(false);
 
-  const doSync = async (showToast = false) => {
+  // ── Push to API ──
+  // Sends the current in-memory tournaments to the server.
+  // Called on a debounce after every save().
+  const pushToServer = useCallback(async (showToast = false) => {
     if (!navigator.onLine) { setSyncStatus('offline'); return; }
-    if (syncInProgress.current) return;
-    syncInProgress.current = true;
+    if (pushInProgress.current) return;
+    pushInProgress.current = true;
     setSyncStatus('syncing');
     try {
-      const local = loadTournaments();
-      const ownedLocal  = local.filter(t => !t.sharedFrom);
-      const sharedLocal = local.filter(t =>  t.sharedFrom);
+      // Read latest in-memory state via functional update trick
+      let latest: Tournament[] = [];
+      setTournaments(prev => { latest = prev; return prev; });
 
-      // Pull + push owned tournaments
-      let ownedMerged: Tournament[] = ownedLocal;
-      const pullRes = await authFetch("/api/tournaments");
-      if (pullRes.status === 401) {
-        setSyncStatus('unauthed');
-        if (showToast) toast.error("Not logged in — changes saved locally only");
-        return;
-      }
-      if (pullRes.ok) {
-        const { tournaments: remote } = await pullRes.json() as { tournaments: Tournament[] };
-        const deletedIds = getDeletedTournamentIds();
-        const remoteFiltered = remote.filter((t: Tournament) => !deletedIds.has(t.id));
-        const remoteMap = new Map(remoteFiltered.map((t: Tournament) => [t.id, t]));
-        const localMap  = new Map(ownedLocal.map(t => [t.id, t]));
-        const allRemoteIds = new Set(remote.map((t: Tournament) => t.id));
-        const allIds = new Set([...localMap.keys(), ...remoteMap.keys()]);
-        ownedMerged = [];
-        allIds.forEach(id => {
-          const l = localMap.get(id);
-          const r = remoteMap.get(id);
-          if (!l) { ownedMerged.push(r!); return; }
-          if (!r) {
-            if (!allRemoteIds.has(id) && !deletedIds.has(id)) ownedMerged.push(l);
-            return;
-          }
-          const localNewer = (l.updatedAt ?? "") >= (r.updatedAt ?? "");
-          const base = localNewer ? l : r;
-          const other = localNewer ? r : l;
-          ownedMerged.push({ ...base, teams: mergeTeams(base.teams ?? [], other.teams ?? [], localNewer) });
+      const owned = latest.filter(t => !t.sharedFrom);
+      const sharedCodes = latest
+        .filter(t => t.sharedFrom)
+        .map(t => t.sharedFrom!)
+        .filter((v, i, a) => a.indexOf(v) === i);
+
+      if (owned.length > 0 || sharedCodes.length > 0) {
+        const res = await authFetch("/api/tournaments", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tournaments: owned, sharedCodes }),
         });
-        const pushPayload = ownedMerged.filter(t => !deletedIds.has(t.id));
-        const allSharedCodes = loadTournaments().filter(t => t.sharedFrom).map(t => t.sharedFrom!).filter((v, i, a) => a.indexOf(v) === i);
-        if (pushPayload.length > 0 || allSharedCodes.length > 0) {
-          const pushRes = await authFetch("/api/tournaments", {
-            method: "PUT", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tournaments: pushPayload, sharedCodes: allSharedCodes }),
-          });
-          if (pushRes.status === 401) { setSyncStatus('unauthed'); return; }
-          if (!pushRes.ok) throw new Error("Sync push failed");
+        if (res.status === 401) {
+          setSyncStatus('unauthed');
+          if (showToast) toast.error("Not logged in — changes not saved");
+          return;
         }
+        if (!res.ok) throw new Error("Push failed");
       }
 
-      // Pull + push shared tournaments
-      const ownedIdSet = new Set(ownedLocal.map(t => t.id));
-      const cleanedSharedLocal = sharedLocal.filter(st => !ownedIdSet.has(st.id));
-      if (cleanedSharedLocal.length < sharedLocal.length) {
-        const without = loadTournaments().filter(t => !(t.sharedFrom && ownedIdSet.has(t.id)));
-        saveTournaments(without);
-      }
-
-      const sharedMerged: Tournament[] = [];
-      for (const st of cleanedSharedLocal) {
-        const code = st.sharedFrom!;
-        try {
-          const sRes = await fetch(`/api/share/${code}`);
-          if (!sRes.ok) { sharedMerged.push(st); continue; }
-          const { tournament: remote } = await sRes.json() as { tournament: Tournament };
-          // Shared = pure mirror of owner's data, no merge
-          sharedMerged.push({ ...remote, sharedFrom: code });
-        } catch { sharedMerged.push(st); }
-      }
-
-      // Combine owned + shared
-      const seenIds = new Set<string>();
-      const combined: Tournament[] = [];
-      for (const t of [...sharedMerged, ...ownedMerged]) {
-        if (!seenIds.has(t.id)) { seenIds.add(t.id); combined.push(t); }
-      }
-      const finalMerged = [...combined.filter(t => !t.sharedFrom), ...combined.filter(t => t.sharedFrom)];
-
-      // Merge with fresh localStorage to preserve mid-sync saves
-      const freshLocal = loadTournaments();
-      const freshMap   = new Map(freshLocal.map(t => [t.id, t]));
-      const syncMap    = new Map(finalMerged.map(t => [t.id, t]));
-      const allFinalIds = new Set([...freshMap.keys(), ...syncMap.keys()]);
-      const ultimateMerged: Tournament[] = [];
-      allFinalIds.forEach(id => {
-        const f = freshMap.get(id);
-        const s = syncMap.get(id);
-        if (!f) { ultimateMerged.push(s!); return; }
-        if (!s) { ultimateMerged.push(f);  return; }
-        // Shared = always take synced (owner's) version
-        if (f.sharedFrom || s.sharedFrom) { ultimateMerged.push(s); return; }
-        const freshNewer = (f.updatedAt ?? "") >= (s.updatedAt ?? "");
-        const base  = freshNewer ? f : s;
-        const other = freshNewer ? s : f;
-        ultimateMerged.push({ ...base, teams: mergeTeams(base.teams ?? [], other.teams ?? [], freshNewer) });
-      });
-      saveTournaments(ultimateMerged);
-      setTournaments(ultimateMerged);
-      setTournament(prev => prev ? (ultimateMerged.find(t => t.id === prev.id) ?? prev) : prev);
-      setPastTeams(syncPastTeamsFromTournaments(ultimateMerged));
+      // After successful push, update cache
+      writeCache(latest);
       setSyncStatus('synced');
-      if (showToast) toast.success(`Synced ☁️`);
+      if (showToast) toast.success("Synced ☁️");
     } catch {
       if (!navigator.onLine) {
         setSyncStatus('offline');
-        if (showToast) toast.error("You're offline — will retry when connected");
       } else {
         setSyncStatus('idle');
-        if (showToast) toast.error("Sync failed — retrying…");
-        if (syncTimer.current) clearTimeout(syncTimer.current);
-        syncTimer.current = setTimeout(() => doSync(false), 5000);
+        // Retry in 5s
+        if (pushTimer.current) clearTimeout(pushTimer.current);
+        pushTimer.current = setTimeout(() => pushToServer(false), 5000);
       }
     } finally {
-      syncInProgress.current = false;
+      pushInProgress.current = false;
     }
-  };
-
-  const scheduleSyncDebounce = useCallback(() => {
-    setSyncStatus('pending');
-    if (syncTimer.current) clearTimeout(syncTimer.current);
-    syncTimer.current = setTimeout(() => doSync(false), 1000);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Debounced push — called after every save()
+  const scheduleSyncDebounce = useCallback(() => {
+    setSyncStatus('pending');
+    if (pushTimer.current) clearTimeout(pushTimer.current);
+    pushTimer.current = setTimeout(() => pushToServer(false), 500);
+  }, [pushToServer]);
+
+  // ── Save ──
+  // Updates in-memory state immediately → schedules debounced push to API
   const save = useCallback((t: Tournament) => {
     const updated = { ...t, updatedAt: new Date().toISOString() };
-    const all = loadTournaments();
-    const idx = all.findIndex(x => x.id === updated.id);
-    const persisted = idx >= 0 ? all.map(x => x.id === updated.id ? updated : x) : [...all, updated];
-    saveTournaments(persisted);
     setTournament(updated);
-    setTournaments(persisted);
+    setTournaments(prev => {
+      const idx = prev.findIndex(x => x.id === updated.id);
+      const next = idx >= 0
+        ? prev.map(x => x.id === updated.id ? updated : x)
+        : [...prev, updated];
+      return next;
+    });
     scheduleSyncDebounce();
   }, [scheduleSyncDebounce]);
 
+  // ── Full pull from server (manual sync button) ──
   const handleSync = useCallback(() => {
-    if (syncTimer.current) { clearTimeout(syncTimer.current); syncTimer.current = null; }
-    doSync(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (pushTimer.current) { clearTimeout(pushTimer.current); pushTimer.current = null; }
+    const doFullSync = async () => {
+      if (!navigator.onLine) { setSyncStatus('offline'); toast.error("You're offline"); return; }
+      setSyncStatus('syncing');
+      try {
+        // First push any pending changes
+        let latest: Tournament[] = [];
+        setTournaments(prev => { latest = prev; return prev; });
 
-  // Initial load — online-first, fallback to local
-  useEffect(() => {
-    const local = loadTournaments();
-    const deletedIds = getDeletedTournamentIds();
+        const owned = latest.filter(t => !t.sharedFrom);
+        const sharedCodes = latest
+          .filter(t => t.sharedFrom)
+          .map(t => t.sharedFrom!)
+          .filter((v, i, a) => a.indexOf(v) === i);
 
-    authFetch("/api/tournaments")
-      .then(r => r.ok ? r.json() : null)
-      .then(async (json) => {
-        if (!json?.tournaments) {
-          setTournaments(local);
-          setPastTeams(syncPastTeamsFromTournaments(local));
-          setPageLoaded(true);
-          setSyncStatus('offline');
-          return;
+        if (owned.length > 0 || sharedCodes.length > 0) {
+          await authFetch("/api/tournaments", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tournaments: owned, sharedCodes }),
+          });
         }
-        const remote: Tournament[] = json.tournaments;
-        const serverSharedCodes: string[] = json.sharedCodes ?? [];
-        const remoteFiltered = remote.filter((t: Tournament) => !deletedIds.has(t.id));
-        const remoteMap = new Map(remoteFiltered.map((t: Tournament) => [t.id, t]));
-        const localMap  = new Map(local.map(t => [t.id, t]));
-        const allRemoteIds = new Set(remote.map((t: Tournament) => t.id));
-        const allIds = new Set([...remoteMap.keys(), ...localMap.keys()]);
-        const merged: Tournament[] = [];
-        allIds.forEach(id => {
-          const r = remoteMap.get(id);
-          const l = localMap.get(id);
-          if (r && !l) { merged.push(r); return; }
-          if (l && !r) {
-            if (!allRemoteIds.has(id) && !deletedIds.has(id)) merged.push(l);
-            return;
-          }
-          const rTs = r!.updatedAt ?? r!.createdAt ?? "";
-          const lTs = l!.updatedAt ?? l!.createdAt ?? "";
-          const serverNewer = rTs >= lTs;
-          const base  = serverNewer ? r! : l!;
-          const other = serverNewer ? l! : r!;
-          // Shared = always take server (owner's) version as-is
-          if (r!.sharedFrom || l!.sharedFrom) { merged.push({ ...r!, sharedFrom: l!.sharedFrom || r!.sharedFrom }); return; }
-          merged.push({ ...base, teams: mergeTeams(base.teams ?? [], other.teams ?? [], !serverNewer) });
-        });
 
-        const localSharedCodes = new Set(local.filter(t => t.sharedFrom).map(t => t.sharedFrom!));
-        for (const code of serverSharedCodes) {
-          if (localSharedCodes.has(code)) continue;
+        // Then pull fresh data from server
+        const pullRes = await authFetch("/api/tournaments");
+        if (pullRes.status === 401) { setSyncStatus('unauthed'); toast.error("Not logged in"); return; }
+        if (!pullRes.ok) throw new Error("Pull failed");
+
+        const { tournaments: remote, sharedCodes: serverSharedCodes } = await pullRes.json() as {
+          tournaments: Tournament[];
+          sharedCodes: string[];
+        };
+
+        // Pull shared tournaments
+        const sharedTournaments: Tournament[] = [];
+        for (const code of (serverSharedCodes ?? [])) {
           try {
             const sRes = await fetch(`/api/share/${code}`);
             if (!sRes.ok) continue;
-            const { tournament: t } = await sRes.json();
-            if (t && !merged.some(m => m.id === t.id)) {
-              merged.push({ ...t, sharedFrom: code, updatedAt: new Date().toISOString() });
+            const { tournament: t } = await sRes.json() as { tournament: Tournament };
+            if (t && !remote.some(r => r.id === t.id)) {
+              sharedTournaments.push({ ...t, sharedFrom: code });
             }
           } catch { /* skip */ }
         }
 
-        saveTournaments(merged);
+        const merged = [...remote, ...sharedTournaments];
+        setTournaments(merged);
+        setTournament(prev => prev ? (merged.find(t => t.id === prev.id) ?? prev) : prev);
+        setPastTeams(syncPastTeamsFromTournaments(merged));
+        writeCache(merged);
+        setSyncStatus('synced');
+        toast.success("Synced ☁️");
+      } catch {
+        setSyncStatus(navigator.onLine ? 'idle' : 'offline');
+        toast.error("Sync failed");
+      }
+    };
+    doFullSync();
+  }, []);
+
+  // ── Initial load — cloud-first, cache fallback ──
+  useEffect(() => {
+    // Show cached data immediately for fast initial render
+    const cached = readCache();
+    if (cached.length > 0) {
+      setTournaments(cached);
+      setPastTeams(syncPastTeamsFromTournaments(cached));
+    }
+
+    // Fetch from server (source of truth)
+    authFetch("/api/tournaments")
+      .then(r => r.ok ? r.json() : null)
+      .then(async (json) => {
+        if (!json?.tournaments) {
+          // API failed — keep cached data
+          setPageLoaded(true);
+          setSyncStatus(navigator.onLine ? 'idle' : 'offline');
+          return;
+        }
+
+        const remote: Tournament[] = json.tournaments;
+        const serverSharedCodes: string[] = json.sharedCodes ?? [];
+
+        // Pull shared tournaments
+        const sharedTournaments: Tournament[] = [];
+        for (const code of serverSharedCodes) {
+          try {
+            const sRes = await fetch(`/api/share/${code}`);
+            if (!sRes.ok) continue;
+            const { tournament: t } = await sRes.json() as { tournament: Tournament };
+            if (t && !remote.some(r => r.id === t.id)) {
+              sharedTournaments.push({ ...t, sharedFrom: code });
+            }
+          } catch { /* skip */ }
+        }
+
+        const merged = [...remote, ...sharedTournaments];
         setTournaments(merged);
         setPastTeams(syncPastTeamsFromTournaments(merged));
+        writeCache(merged);
         setPageLoaded(true);
         setSyncStatus('synced');
       })
       .catch(() => {
-        setTournaments(local);
-        setPastTeams(syncPastTeamsFromTournaments(local));
+        // Offline or error — use cache
         setPageLoaded(true);
         if (!navigator.onLine) setSyncStatus('offline');
-        else setTimeout(() => doSync(false), 5000);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Force sync on page close
+  // ── Push pending data on page close ──
   useEffect(() => {
     const onBeforeUnload = () => {
-      if (syncTimer.current) {
-        clearTimeout(syncTimer.current);
-        syncTimer.current = null;
-        const local = loadTournaments().filter(t => !t.sharedFrom);
-        if (local.length > 0) {
+      if (pushTimer.current) {
+        clearTimeout(pushTimer.current);
+        pushTimer.current = null;
+        // Use sendBeacon for reliable last-chance push
+        let latest: Tournament[] = [];
+        setTournaments(prev => { latest = prev; return prev; });
+        const owned = latest.filter(t => !t.sharedFrom);
+        if (owned.length > 0) {
           navigator.sendBeacon(
             "/api/tournaments",
-            new Blob([JSON.stringify({ tournaments: local })], { type: "application/json" })
+            new Blob([JSON.stringify({ tournaments: owned })], { type: "application/json" })
           );
         }
       }

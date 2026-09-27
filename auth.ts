@@ -13,6 +13,7 @@ declare module "next-auth" {
       image?: string | null;
       role: string;
       subscriptionEnd: string | null;
+      pendingPlanDays: number | null;
     };
   }
 }
@@ -72,6 +73,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.id = dbUser.id;
           token.role = dbUser.role;
           token.subscriptionEnd = dbUser.subscriptionEnd?.toISOString() ?? null;
+          token.pendingPlanDays = dbUser.pendingPlanDays ?? null;
         }
       }
       return token;
@@ -81,6 +83,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.role = (token.role as string) ?? "USER";
         session.user.subscriptionEnd = (token.subscriptionEnd as string) ?? null;
+        session.user.pendingPlanDays = (token.pendingPlanDays as number) ?? null;
       }
       return session;
     },

@@ -14,6 +14,7 @@ interface UserRow {
   image: string | null;
   role: string;
   subscriptionEnd: string | null;
+  pendingPlanDays: number | null;
   createdAt: string;
   _count: { savedTournaments: number };
 }
@@ -89,6 +90,7 @@ export default function AdminPage() {
 
   const getSubStatus = (u: UserRow) => {
     if (u.role === "ADMIN") return { label: "Admin", color: "#fbbf24", active: true };
+    if (u.pendingPlanDays) return { label: `Pending ${u.pendingPlanDays}d`, color: "#60a5fa", active: false };
     if (!u.subscriptionEnd) return { label: "No sub", color: "#6b7280", active: false };
     const end = new Date(u.subscriptionEnd);
     const days = Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24));

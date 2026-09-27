@@ -19,6 +19,7 @@ export async function GET() {
       image: true,
       role: true,
       subscriptionEnd: true,
+      pendingPlanDays: true,
       createdAt: true,
       _count: { select: { savedTournaments: true } },
     },
@@ -58,25 +59,18 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "days must be > 0" }, { status: 400 });
   }
 
-  // Extend from now (or from current end if still active)
+  // Store as a pending plan — user activates it themselves
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const now = new Date();
-  const currentEnd = user.subscriptionEnd && user.subscriptionEnd > now
-    ? user.subscriptionEnd
-    : now;
-  const newEnd = new Date(currentEnd);
-  newEnd.setDate(newEnd.getDate() + days);
-
   await prisma.user.update({
     where: { id: userId },
-    data: { subscriptionEnd: newEnd },
+    data: { pendingPlanDays: days },
   });
 
   return NextResponse.json({
     success: true,
-    subscriptionEnd: newEnd.toISOString(),
-    message: `Subscription extended to ${newEnd.toLocaleDateString("en-IN")}`,
+    pendingPlanDays: days,
+    message: `${days}-day plan assigned — user will activate it on their next login`,
   });
 }

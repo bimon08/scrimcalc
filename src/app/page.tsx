@@ -13,13 +13,14 @@ import {
 } from "./components";
 import { useCloudSync } from "./hooks/useCloudSync";
 import { useSubscription } from "./hooks/useSubscription";
-import { loadTournaments, saveTournaments, createTournament, deleteTournamentById } from "@/lib/storage";
+import { createTournament } from "@/lib/storage";
 import { computeStandings as computeStandingsFromTournament, normalizeAndAssign } from "@/lib/standings";
 import { parseTeamPaste } from "@/lib/parseTeam";
 import { generatePrompt } from "@/lib/prompt";
 import { authFetch } from "@/lib/authFetch";
 import { normalizeGeminiData, uniquePlayers, autoAssignAndEnrich } from "@/lib/gemini";
 import SubscriptionNudge from "@/components/subscription-gate";
+import ActivationPopup from "@/components/activation-popup";
 
 const APP_NAME = "ScrimCalc";
 
@@ -84,6 +85,14 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
   } = useCloudSync();
   const sub = useSubscription();
   const { guard } = sub;
+
+  // Auto-show activation popup when user has a pending plan
+  useEffect(() => {
+    if (sub.pendingPlanDays && sub.pendingPlanDays > 0 && pageLoaded) {
+      sub.setShowActivation(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sub.pendingPlanDays, pageLoaded]);
 
   // Guarded save — blocks saving when subscription expired
   const save = useCallback((t: Tournament) => {
@@ -231,9 +240,9 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
     if (!sub.isActive && !sub.isAdmin) { sub.setShowNudge(true); return; }
     if (!createName.trim()) return;
     const t = createTournament(createName.trim());
-    setTournaments((prev) => { const u = [...prev, t]; saveTournaments(u); return u; });
+    setTournaments((prev) => [...prev, t]);
     setTournament(t);
-    scheduleSyncDebounce();
+    save(t);
     setCreateName(""); setRoundRobin(false); setShowCreate(false);
     setAddForm({ name: "", tags: "", phone: "" });
     setAddScreenTab("add"); setAddScreenMode("create"); setShowAddScreen(true);
@@ -334,13 +343,13 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
 
   const handleDeleteTournament = async (id: string) => {
     if (!sub.isActive && !sub.isAdmin) { sub.setShowNudge(true); return; }
-    setTournaments((prev) => deleteTournamentById(id, prev));
+    setTournaments((prev) => prev.filter(t => t.id !== id));
     toast.success("Deleted");
-    // Delete from server — await so sync doesn't race and re-create it
+    // Delete from server
     try {
       const res = await authFetch(`/api/tournaments/${id}`, { method: "DELETE" });
       if (!res.ok) toast.error("Server delete failed");
-    } catch { /* offline — deleted ID is tracked so sync won't re-add */ }
+    } catch { /* offline */ }
     scheduleSyncDebounce();
   };
 
@@ -384,7 +393,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
       const { tournament: t } = await res.json();
       if (!t) { toast.error("Invalid code"); return; }
 
-      const existing = loadTournaments();
+      const existing = tournaments;
 
       // Block self-import: user is trying to import their own tournament
       const ownedIds = new Set(existing.filter(e => !e.sharedFrom).map(e => e.id));
@@ -402,9 +411,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
         return;
       }
       const cloned: Tournament = { ...t, id: t.id ?? crypto.randomUUID(), sharedFrom: code, updatedAt: new Date().toISOString() };
-      const updated = [cloned, ...existing];
-      saveTournaments(updated);
-      setTournaments(updated);
+      setTournaments((prev) => [cloned, ...prev]);
       scheduleSyncDebounce();
       setImportCode(""); setShowImportCode(false);
       toast.success(`"${t.name}" imported! Changes will sync back to the owner.`);
@@ -489,29 +496,24 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
   return (
     <div className="min-h-screen pb-36" style={{ background: "#0c0914" }} onPaste={handlePaste}>
 
-      {/* FREE TRIAL BANNER */}
-      {!sub.isAdmin && sub.isActive && sub.daysLeft !== null && sub.daysLeft > 0 && (
+      {/* SUBSCRIPTION BANNER */}
+      {!sub.isAdmin && sub.daysLeft !== null && sub.daysLeft > 0 && sub.daysLeft <= 2 && (
         <div className="mx-auto max-w-md px-4 pt-4">
           <div
             className="flex items-center justify-between rounded-xl px-4 py-2.5 text-xs font-semibold"
             style={{
-              background: sub.daysLeft <= 2
-                ? "rgba(239,68,68,0.12)"
-                : "rgba(124,58,237,0.12)",
-              border: `1px solid ${sub.daysLeft <= 2 ? "rgba(239,68,68,0.3)" : "rgba(124,58,237,0.25)"}`,
-              color: sub.daysLeft <= 2 ? "#fca5a5" : "#c4b5fd",
+              background: "rgba(239,68,68,0.12)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              color: "#fca5a5",
             }}
           >
-            <span>🎉 Free trial: <strong>{sub.daysLeft} day{sub.daysLeft !== 1 ? "s" : ""} left</strong></span>
+            <span>⚠️ Plan expires in <strong>{sub.daysLeft} day{sub.daysLeft !== 1 ? "s" : ""}</strong></span>
             <button
               onClick={() => sub.setShowNudge(true)}
               className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95"
-              style={{
-                background: "rgba(124,58,237,0.3)",
-                color: "#c4b5fd",
-              }}
+              style={{ background: "rgba(239,68,68,0.25)", color: "#fca5a5" }}
             >
-              Subscribe
+              Renew
             </button>
           </div>
         </div>
@@ -582,9 +584,9 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
               ...pendingCloneDraft!,
               teams: pendingCloneDraft!.teams.map(t => ({ ...t, out: !bookedTeamIds.has(t.id) }))
             };
-            setTournaments((prev) => { const u = [...prev, final]; saveTournaments(u); return u; });
+            setTournaments((prev) => [...prev, final]);
             setTournament(final);
-            scheduleSyncDebounce();
+            save(final);
             setPendingCloneDraft(null);
             setExcludedCloneTeams(new Set());
             setShowAddScreen(false);
@@ -832,6 +834,19 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
           userEmail={session?.user?.email}
           isLoggedIn={sub.isLoggedIn}
           onClose={() => sub.setShowNudge(false)}
+        />
+      )}
+
+      {/* ACTIVATION POPUP */}
+      {sub.showActivation && sub.pendingPlanDays && sub.pendingPlanDays > 0 && (
+        <ActivationPopup
+          pendingDays={sub.pendingPlanDays}
+          onClose={() => sub.setShowActivation(false)}
+          onActivated={() => {
+            sub.setShowActivation(false);
+            // Force session refresh to pick up the new subscriptionEnd
+            window.location.reload();
+          }}
         />
       )}
 

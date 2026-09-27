@@ -11,9 +11,14 @@ export interface SubscriptionInfo {
   isLoggedIn: boolean;
   /** Days remaining (-ve if expired) */
   daysLeft: number | null;
+  /** Pending plan days (admin-assigned, waiting for user to activate) */
+  pendingPlanDays: number | null;
   /** Show the subscription nudge modal */
   showNudge: boolean;
   setShowNudge: (v: boolean) => void;
+  /** Show the pending plan activation modal */
+  showActivation: boolean;
+  setShowActivation: (v: boolean) => void;
   /**
    * Wraps any action callback. If subscription is expired, shows the nudge
    * instead of running the callback. Admin always passes through.
@@ -24,10 +29,12 @@ export interface SubscriptionInfo {
 export function useSubscription(): SubscriptionInfo {
   const { data: session } = useSession();
   const [showNudge, setShowNudge] = useState(false);
+  const [showActivation, setShowActivation] = useState(false);
 
   const isLoggedIn = !!session?.user;
   const role = session?.user?.role ?? "USER";
   const subEnd = session?.user?.subscriptionEnd;
+  const pendingPlanDays = session?.user?.pendingPlanDays ?? null;
   const isAdmin = role === "ADMIN";
 
   let isActive = true;
@@ -40,6 +47,7 @@ export function useSubscription(): SubscriptionInfo {
     isActive = daysLeft > 0;
   } else if (!isAdmin && !subEnd) {
     // No subscription end set and not admin = expired (edge case)
+    // But if they have a pending plan, show activation instead
     isActive = false;
     daysLeft = 0;
   }
@@ -60,5 +68,11 @@ export function useSubscription(): SubscriptionInfo {
     };
   }, [isAdmin, isActive]);
 
-  return { isActive, isAdmin, isLoggedIn, daysLeft, showNudge, setShowNudge, guard };
+  return {
+    isActive, isAdmin, isLoggedIn, daysLeft,
+    pendingPlanDays,
+    showNudge, setShowNudge,
+    showActivation, setShowActivation,
+    guard,
+  };
 }
