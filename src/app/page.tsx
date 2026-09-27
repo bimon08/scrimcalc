@@ -9,6 +9,7 @@ import {
   CollabDeleteConfirm, TeamEditScreen, PointSystemModal, EditSheet,
   AddTeamsScreen, AdvancedScreen, SplitScreen, StandingsModal,
   SlotsModal, RoomInfoModal, CalculateScreen, MainView, RulesModal,
+  MatchEditOverlay,
 } from "./components";
 import { useCloudSync } from "./hooks/useCloudSync";
 import { useSubscription } from "./hooks/useSubscription";
@@ -143,6 +144,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
 
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showSplit, setShowSplit] = useState(false);
+  const [showMatchEdit, setShowMatchEdit] = useState(false);
   const [groupFilter, setGroupFilter] = useState<string>("all");
 
   // Tracks whether we've pushed a history entry for the current overlay session.
@@ -156,7 +158,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
       showCreate || showAddScreen || !!editingTeam ||
       showStats || showStandings || showSlots ||
       showPointSystem || showEdit ||
-      showAdvanced || showSplit;
+      showAdvanced || showSplit || showMatchEdit;
 
     if (anyOpen && !overlayPushed.current) {
       // Push with a hash so the URL changes and the system back button
@@ -172,6 +174,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
     const onPop = () => {
       overlayPushed.current = false;
       // Close in reverse-depth order (deepest first)
+      if (showMatchEdit)  { setShowMatchEdit(false); return; }
       if (showSplit)      { setShowSplit(false); return; }
       if (showAdvanced)   { setShowAdvanced(false); return; }
       if (editingTeam)    { setEditingTeam(null); return; }
@@ -187,7 +190,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, [showCreate, showAddScreen, editingTeam, showStats, showStandings,
-      showSlots, showPointSystem, showEdit, showAdvanced, showSplit]);
+      showSlots, showPointSystem, showEdit, showAdvanced, showSplit, showMatchEdit]);
 
   /**
    * Close an overlay via the close BUTTON.
@@ -475,7 +478,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
   };
 
   // Hide bottom nav when any sheet/modal is open
-  const anyModalOpen = showCreate || showAddScreen || showEdit || showStats || showStandings || showSlots || showPointSystem || showAdvanced || showSplit;
+  const anyModalOpen = showCreate || showAddScreen || showEdit || showStats || showStandings || showSlots || showPointSystem || showAdvanced || showSplit || showMatchEdit;
   // Lock body scroll when any modal/overlay is open
   useEffect(() => {
     document.body.dataset.modal = anyModalOpen ? "open" : "";
@@ -687,7 +690,44 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
             setShowPointSystem(true);
           }}
           onOpenAdvanced={() => { setShowEdit(false); setShowAdvanced(true); }}
+          onEditPoints={() => { setShowEdit(false); setShowMatchEdit(true); }}
           onDelete={handleDeleteTournament}
+        />
+      )}
+
+      {/* MATCH EDIT OVERLAY */}
+      {showMatchEdit && tournament && groups.length > 0 && (
+        <MatchEditOverlay
+          tournament={tournament}
+          groups={groups}
+          matchesDetected={matchesDetected}
+          onClose={() => closeOverlay(() => setShowMatchEdit(false))}
+          onSave={(updates) => {
+            if (!tournament?.geminiData) return;
+            const ps = tournament.pointSystem ?? DEFAULT_BGMI_POINTS;
+            const newGroups = tournament.geminiData.groups.map(g => {
+              const update = updates.find(u => u.groupLabel === g.group);
+              if (!update) return g;
+              const matches = update.matches;
+              const totals = {
+                totalPoints: matches.reduce((a, m) => a + m.matchPoints, 0),
+                chickenDinners: matches.filter(m => m.position === 1).length,
+                totalPlacementPoints: matches.reduce((a, m) => a + m.placementPoints, 0),
+                totalKills: matches.reduce((a, m) => a + m.teamKills, 0),
+                lastMatchPosition: matches[matches.length - 1]?.position ?? 0,
+              };
+              return { ...g, matches, totals };
+            });
+            const updatedData = { ...tournament.geminiData, groups: newGroups };
+            const updated = { ...tournament, geminiData: updatedData };
+            save(updated);
+            const { groups: refreshedGroups, assignments: a, matchesDetected: md } = normalizeAndAssign(updated);
+            setGroups(refreshedGroups);
+            setAssignments(a);
+            setMatchesDetected(md);
+            recomputeStandings(updated);
+            closeOverlay(() => setShowMatchEdit(false));
+          }}
         />
       )}
 
@@ -732,30 +772,6 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
             toast.success("Match data cleared");
           }}
           onClose={() => closeOverlay(() => setShowStats(false))}
-          onUpdateGroup={(groupLabel, updatedMatches) => {
-            if (!tournament?.geminiData) return;
-            const ps = tournament.pointSystem ?? DEFAULT_BGMI_POINTS;
-            const newGroups = tournament.geminiData.groups.map(g => {
-              if (g.group !== groupLabel) return g;
-              const totals = {
-                totalPoints: updatedMatches.reduce((a, m) => a + m.matchPoints, 0),
-                chickenDinners: updatedMatches.filter(m => m.position === 1).length,
-                totalPlacementPoints: updatedMatches.reduce((a, m) => a + m.placementPoints, 0),
-                totalKills: updatedMatches.reduce((a, m) => a + m.teamKills, 0),
-                lastMatchPosition: updatedMatches[updatedMatches.length - 1]?.position ?? 0,
-              };
-              return { ...g, matches: updatedMatches, totals };
-            });
-            const updatedData = { ...tournament.geminiData, groups: newGroups };
-            const updated = { ...tournament, geminiData: updatedData };
-            save(updated);
-            // Refresh groups + standings from the new data
-            const { groups: refreshedGroups, assignments: a, matchesDetected: md } = normalizeAndAssign(updated);
-            setGroups(refreshedGroups);
-            setAssignments(a);
-            setMatchesDetected(md);
-            recomputeStandings(updated);
-          }}
         />
       )}
 

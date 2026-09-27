@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
-import { Trash2, X, ChevronDown, ChevronUp, ClipboardPaste, Trophy, Pencil, Check as CheckIcon } from "lucide-react";
+import { Trash2, X, ChevronDown, ChevronUp, ClipboardPaste, Trophy } from "lucide-react";
 import { toast } from "sonner";
-import { Tournament, AssignedGroup, StandingRow, GroupMatch, DEFAULT_BGMI_POINTS } from "@/lib/types";
+import { Tournament, AssignedGroup, StandingRow, DEFAULT_BGMI_POINTS } from "@/lib/types";
 import GroupFilterDropdown from "./GroupFilterDropdown";
 
 interface Props {
@@ -19,18 +19,15 @@ interface Props {
   onPasteJson: () => void;
   onClearData: () => void;
   onClose: () => void;
-  onUpdateGroup?: (groupLabel: string, matches: GroupMatch[]) => void;
 }
 
 export default function CalculateScreen({
   tournament, groups, assignments, matchesDetected, groupFilter, setGroupFilter,
-  onAssignTeam, onUnassignTeam, onCopyPrompt, onPasteJson, onClearData, onClose, onUpdateGroup,
+  onAssignTeam, onUnassignTeam, onCopyPrompt, onPasteJson, onClearData, onClose,
 }: Props) {
   const [selectedMatch, setSelectedMatch] = useState<number | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
-  const [editingGroup, setEditingGroup] = useState<string | null>(null);
-  const [editMatches, setEditMatches] = useState<GroupMatch[]>([]);
 
   const toggleExpand = (g: string) => setExpandedGroups(p => { const n = new Set(p); n.has(g) ? n.delete(g) : n.add(g); return n; });
   const assignedTeamIds = new Set(Object.values(assignments));
@@ -178,92 +175,6 @@ export default function CalculateScreen({
                         </div>
                       </>);
                     })()}
-                  </div>
-                  {/* Edit Points button */}
-                  <div className="px-4 pb-3">
-                    {editingGroup === group.group ? (
-                      /* ── Inline edit panel ── */
-                      <div className="rounded-xl border border-violet-500/25 bg-violet-500/[0.04] p-3 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[10px] font-bold tracking-widest" style={{ color: "rgba(167,139,250,0.6)" }}>EDIT POINTS</p>
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => { setEditingGroup(null); setEditMatches([]); }}
-                              className="text-[10px] px-2 py-1 rounded-lg font-medium text-zinc-400 hover:bg-zinc-800 transition-colors"
-                            >Cancel</button>
-                            <button
-                              onClick={() => {
-                                if (onUpdateGroup) {
-                                  const ps = tournament.pointSystem ?? DEFAULT_BGMI_POINTS;
-                                  const recalced = editMatches.map(m => {
-                                    const teamKills = Object.values(m.playerKills ?? {}).reduce((a, b) => a + b, 0);
-                                    const placementPoints = ps.positionPoints[m.position - 1] ?? 0;
-                                    const matchPoints = placementPoints + teamKills * ps.killPoints;
-                                    return { ...m, teamKills, placementPoints, matchPoints };
-                                  });
-                                  onUpdateGroup(group.group, recalced);
-                                  toast.success("Points updated!");
-                                }
-                                setEditingGroup(null);
-                                setEditMatches([]);
-                              }}
-                              className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-lg font-bold text-white transition-all active:scale-95"
-                              style={{ background: "linear-gradient(135deg,#7c3aed,#9333ea)" }}
-                            ><CheckIcon className="h-3 w-3" /> Save</button>
-                          </div>
-                        </div>
-                        <div className="space-y-3">
-                          {editMatches.map((m, mi) => (
-                            <div key={m.match} className="rounded-lg bg-zinc-900/60 border border-zinc-800/50 p-2.5 space-y-2">
-                              <p className="text-[11px] font-bold text-zinc-400">Match {m.match}</p>
-                              <div className="flex items-center gap-3">
-                                <label className="text-[10px] text-zinc-500 shrink-0 w-12">Position</label>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  value={m.position}
-                                  onChange={(e) => {
-                                    const val = Math.max(1, parseInt(e.target.value) || 1);
-                                    setEditMatches(prev => prev.map((em, i) => i === mi ? { ...em, position: val } : em));
-                                  }}
-                                  className="w-16 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white text-center focus:outline-none focus:border-violet-500/50 transition-colors"
-                                />
-                              </div>
-                              <div className="space-y-1.5">
-                                <p className="text-[10px] text-zinc-500">Player Kills</p>
-                                {Object.entries(m.playerKills).map(([playerName, kills]) => (
-                                  <div key={playerName} className="flex items-center gap-2">
-                                    <span className="text-[10px] text-zinc-400 flex-1 truncate">{playerName}</span>
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      value={kills}
-                                      onChange={(e) => {
-                                        const val = Math.max(0, parseInt(e.target.value) || 0);
-                                        setEditMatches(prev => prev.map((em, i) => i === mi ? { ...em, playerKills: { ...em.playerKills, [playerName]: val } } : em));
-                                      }}
-                                      className="w-14 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-violet-500/50 transition-colors"
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setEditingGroup(group.group);
-                          setEditMatches(group.matches.map(m => ({ ...m, playerKills: { ...m.playerKills } })));
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all active:scale-95 hover:bg-violet-500/10"
-                        style={{ color: "rgba(167,139,250,0.7)", border: "1px solid rgba(124,58,237,0.15)" }}
-                      >
-                        <Pencil className="h-3 w-3" />
-                        Edit Points
-                      </button>
-                    )}
                   </div>
                   {isExpanded && (
                     <div className="px-4 pb-3 pt-2 border-t border-zinc-800/40 space-y-2">
