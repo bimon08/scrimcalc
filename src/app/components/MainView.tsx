@@ -103,16 +103,8 @@ export default function MainView({
             ))}
           </div>
 
-          {/* Empty state */}
-          {pageLoaded && visible.length === 0 && (
-            <div className="text-center py-16">
-              <p className="text-sm font-medium" style={{ color: "rgba(167,139,250,0.4)" }}>{tournamentTab === 'shared' ? 'No shared tournaments' : 'No tournaments yet'}</p>
-              <p className="text-xs mt-1" style={{ color: "rgba(167,139,250,0.25)" }}>{tournamentTab === 'shared' ? 'Import a tournament using a 6-char code' : 'Tap + Create to get started'}</p>
-            </div>
-          )}
-
-          {/* Skeleton */}
-          {!pageLoaded && (
+          {/* Skeleton — shown while cloud data is loading */}
+          {!pageLoaded ? (
             <div className="space-y-3">
               {[1, 2, 3].map(i => (
                 <div key={i} className="rounded-2xl p-4 flex items-center gap-3" style={{ background: "#150e25", border: "1px solid rgba(124,58,237,0.12)" }}>
@@ -124,10 +116,15 @@ export default function MainView({
                 </div>
               ))}
             </div>
-          )}
-
-          {/* Tournament cards */}
-          <div className="space-y-3">
+          ) : visible.length === 0 ? (
+            /* Empty state */
+            <div className="text-center py-16">
+              <p className="text-sm font-medium" style={{ color: "rgba(167,139,250,0.4)" }}>{tournamentTab === 'shared' ? 'No shared tournaments' : 'No tournaments yet'}</p>
+              <p className="text-xs mt-1" style={{ color: "rgba(167,139,250,0.25)" }}>{tournamentTab === 'shared' ? 'Import a tournament using a 6-char code' : 'Tap + Create to get started'}</p>
+            </div>
+          ) : (
+            /* Tournament cards */
+            <div className="space-y-3">
             {visible.map((t, i) => {
               const isOpen = expandedCards.has(t.id);
               return (
@@ -178,6 +175,7 @@ export default function MainView({
               );
             })}
           </div>
+          )}
         </section>
       </div>
 
