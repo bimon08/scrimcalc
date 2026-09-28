@@ -206,8 +206,8 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
     const hPad     = perCol > 12 ? "1px 2px" : perCol > 9 ? "2px 3px" : "3px 4px";
     const hFs      = perCol > 12 ? "5px"   : perCol > 9 ? "5.5px" : "6px";
     const rowPad   = perCol > 12 ? "1px 2px" : perCol > 9 ? "1px 3px" : perCol > 7 ? "2px 3px" : "3px 4px";
-    const getRankBg   = (r: number) => r === 1 ? t.rank1 : r === 2 ? t.rank2 : r === 3 ? t.rank3 : t.rankDefault;
-    const getRankText = (r: number) => r <= 2 ? "#000" : r === 3 ? "#fff" : t.rankDefaultText;
+    const getRankBg   = (_r: number) => t.rankDefault;
+    const getRankText = (_r: number) => t.rankDefaultText;
     const dinCol      = (n: number) => n > 0 ? "#facc15" : "rgba(255,255,255,0.15)";
     const maxScore    = filteredStandings[0]?.totalPoints || 1;
 
@@ -227,9 +227,9 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
-                <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: rowPad, borderBottom: idx < col.length - 1 ? `1px solid ${t.rowBorder}` : "none", background: `linear-gradient(90deg,${ac}${rank <= 3 ? "28" : "0c"} 0%,transparent 72%)`, position: "relative", minHeight: 0 }}>
-                  <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "2px", background: rank <= 3 ? ac : `${ac}28`, borderRadius: "0 1px 1px 0" }} />
-                  <span style={{ width: "16px", textAlign: "center", color: rank <= 3 ? ac : t.rankDefaultText, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace" }}>{rank}</span>
+                <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: rowPad, borderBottom: idx < col.length - 1 ? `1px solid ${t.rowBorder}` : "none", background: `linear-gradient(90deg,${ac}0c 0%,transparent 72%)`, position: "relative", minHeight: 0 }}>
+                  <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "2px", background: `${ac}28`, borderRadius: "0 1px 1px 0" }} />
+                  <span style={{ width: "16px", textAlign: "center", color: t.rankDefaultText, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace" }}>{rank}</span>
                   <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: "3px" }}>{row.teamName.slice(0, 7)}</span>
                   <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.placementPoints}</span>
@@ -260,7 +260,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "2px", minHeight: 0 }}>
               {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
-                <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: rowPad, background: t.tableBg, borderRadius: "5px", border: `1px solid ${rank <= 3 ? ac + "50" : t.tableBorder}`, boxShadow: rank <= 3 ? `0 0 5px ${ac}22` : "none", minHeight: 0 }}>
+                <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: rowPad, background: t.tableBg, borderRadius: "5px", border: `1px solid ${t.tableBorder}`, minHeight: 0 }}>
                   <span className="inline-flex items-center justify-center font-black" style={{ width: rankSize, height: rankSize, fontSize: rankFs, background: getRankBg(rank), color: getRankText(rank), borderRadius: "50%", flexShrink: 0, marginRight: "3px" }}>{rank}</span>
                   <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.teamName.slice(0, 7)}</span>
                   <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
@@ -292,7 +292,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
-                <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: rowPad, borderBottom: idx < col.length - 1 ? `1px solid ${t.rowBorder}` : "none", background: t.rowEven, borderLeft: `3px solid ${rank <= 3 ? ac : "transparent"}`, minHeight: 0 }}>
+                <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: rowPad, borderBottom: idx < col.length - 1 ? `1px solid ${t.rowBorder}` : "none", background: t.rowEven, minHeight: 0 }}>
                   <span className="inline-flex items-center justify-center font-black" style={{ width: rankSize, height: rankSize, fontSize: rankFs, background: getRankBg(rank), color: getRankText(rank), borderRadius: "50%", flexShrink: 0, marginRight: "3px" }}>{rank}</span>
                   <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.teamName.slice(0, 7)}</span>
                   <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
@@ -325,13 +325,13 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
             <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
                 <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: rowPad, borderBottom: idx < col.length - 1 ? `0.5px solid ${t.rowBorder}22` : "none", background: "transparent", minHeight: 0 }}>
-                  <span style={{ width: "20px", textAlign: "left", color: rank <= 3 ? ac : t.legendText, fontSize: fs, fontWeight: 900, fontFamily: "monospace" }}>{String(rank).padStart(2, "0")}.</span>
+                  <span style={{ width: "20px", textAlign: "left", color: t.legendText, fontSize: fs, fontWeight: 900, fontFamily: "monospace" }}>{String(rank).padStart(2, "0")}.</span>
                   <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.teamName.slice(0, 7)}</span>
                   <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.placementPoints}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.55 }}>{row.matchCount}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.totalKills}</span>
-                  <span style={{ color: rank <= 3 ? ac : t.cellText, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
+                  <span style={{ color: t.cellText, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
                 </div>
               ); })}
             </div>
@@ -360,7 +360,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
                   {/* Score progress bar */}
                   <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${barPct}%`, background: `linear-gradient(90deg,${ac}1c 0%,${ac}06 100%)`, pointerEvents: "none" }} />
                   {/* Left accent stripe */}
-                  <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "3px", background: rank <= 3 ? ac : "transparent" }} />
+                  <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "3px", background: "transparent" }} />
                   <span className="inline-flex items-center justify-center rounded font-black" style={{ width: rankSize, height: rankSize, fontSize: rankFs, background: getRankBg(rank), color: getRankText(rank), flexShrink: 0, marginRight: "3px", marginLeft: "5px", position: "relative" }}>{rank}</span>
                   <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", position: "relative" }}>{row.teamName.slice(0, 7)}</span>
                   <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: dinCol(row.chickenDinners), position: "relative" }}>{row.chickenDinners}</span>
@@ -393,13 +393,13 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
             <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
                 <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: rowPad, borderBottom: idx < col.length - 1 ? `1px solid ${t.rowBorder}` : "none", background: idx % 2 === 0 ? t.rowEven : t.rowOdd, fontFamily: "monospace", minHeight: 0 }}>
-                  <span style={{ width: "24px", textAlign: "center", color: rank <= 3 ? ac : t.rankDefaultText, fontSize: fs, fontWeight: 700 }}>[{String(rank).padStart(2, "0")}]</span>
+                  <span style={{ width: "24px", textAlign: "center", color: t.rankDefaultText, fontSize: fs, fontWeight: 700 }}>[{String(rank).padStart(2, "0")}]</span>
                   <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.teamName.slice(0, 7)}</span>
                   <span style={{ width: "14px", textAlign: "center", fontSize: fs, color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs }}>{row.placementPoints}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, opacity: 0.7 }}>{row.matchCount}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs }}>{row.totalKills}</span>
-                  <span style={{ color: rank <= 3 ? ac : t.cellText, fontSize: scoreFs, fontWeight: 900, width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
+                  <span style={{ color: t.cellText, fontSize: scoreFs, fontWeight: 900, width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
                 </div>
               ); })}
             </div>
@@ -457,8 +457,8 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
     const headerPad = perCol > 11 ? "1px 2px" : "1.5px 3px";
     const headerFs  = perCol > 11 ? "5px" : "6px";
     const show3cols = false;
-    const getRankBg = (r: number) => r === 1 ? t.rank1 : r === 2 ? t.rank2 : r === 3 ? t.rank3 : t.rankDefault;
-    const getRankText = (r: number) => r === 1 ? "#000" : r === 2 ? "#000" : r === 3 ? "#fff" : t.rankDefaultText;
+    const getRankBg = (_r: number) => t.rankDefault;
+    const getRankText = (_r: number) => t.rankDefaultText;
     const hTextColor = isMinimal ? t.legendText : t.headerText;
     return (
       <div style={{ display: "flex", gap: "3px", height: "100%", flex: 1, minHeight: 0 }}>
@@ -477,9 +477,9 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
                 const rank = ci * perCol + idx + 1;
                 return (
                   <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: "0 2px", borderBottom: idx < col.length - 1 ? `1px solid ${t.rowBorder}` : "none", background: idx % 2 === 0 ? t.rowEven : t.rowOdd, minHeight: 0 }}>
-                    {isAccentBar && <div style={{ width: "2px", alignSelf: "stretch", background: rank <= 3 ? t.accentColor : "transparent", marginRight: "2px" }} />}
+                    {isAccentBar && <div style={{ width: "2px", alignSelf: "stretch", background: "transparent", marginRight: "2px" }} />}
                     {isMinimal
-                      ? <span style={{ width: rankSize, textAlign: "center", color: rank <= 3 ? t.accentColor : t.legendText, fontSize: fs, fontWeight: 900, fontFamily: "monospace" }}>{rank}</span>
+                      ? <span style={{ width: rankSize, textAlign: "center", color: t.legendText, fontSize: fs, fontWeight: 900, fontFamily: "monospace" }}>{rank}</span>
                       : <span className="inline-flex items-center justify-center rounded font-black" style={{ width: rankSize, height: rankSize, fontSize: rankFs, background: getRankBg(rank), color: getRankText(rank), flexShrink: 0, marginRight: "2px" }}>{rank}</span>
                     }
                     <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.teamName}</span>
@@ -500,15 +500,15 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
 
   const renderList = (t: Theme, data: Array<{ teamName?: string; name?: string; totalKills?: number; kills?: number }>, type: "warhead" | "fraggers") => {
-    const medalStyle = (r: number) => r === 1 ? { bg: t.rank1, color: "#000" } : r === 2 ? { bg: t.rank2, color: "#000" } : r === 3 ? { bg: t.rank3, color: "#fff" } : { bg: t.rankDefault, color: t.rankDefaultText };
+    const medalStyle = (_r: number) => ({ bg: t.rankDefault, color: t.rankDefaultText });
     const icon = type === "warhead" ? "💀" : "🔫";
     if (t.layout === "minimal") {
-      return <div>{data.map((item, idx) => { const label = type === "warhead" ? item.teamName : item.name; const val = type === "warhead" ? item.totalKills : item.kills; return <div key={label} className="flex items-center" style={{ padding: "5px 8px", borderBottom: `1px solid ${t.rowBorder}20` }}><span style={{ width: "18px", textAlign: "center", color: idx < 3 ? t.accentColor : t.legendText, fontSize: "10px", fontWeight: 900, marginRight: "8px" }}>{idx + 1}</span><span style={{ flex: 1, color: t.cellText, fontSize: "11px", fontWeight: 600 }}>{label}</span><span style={{ color: idx === 0 ? t.accentColor : t.cellText, fontSize: "13px", fontWeight: 900, fontFamily: "monospace" }}>{val}</span></div>; })}</div>;
+      return <div>{data.map((item, idx) => { const label = type === "warhead" ? item.teamName : item.name; const val = type === "warhead" ? item.totalKills : item.kills; return <div key={label} className="flex items-center" style={{ padding: "5px 8px", borderBottom: `1px solid ${t.rowBorder}20` }}><span style={{ width: "18px", textAlign: "center", color: t.legendText, fontSize: "10px", fontWeight: 900, marginRight: "8px" }}>{idx + 1}</span><span style={{ flex: 1, color: t.cellText, fontSize: "11px", fontWeight: 600 }}>{label}</span><span style={{ color: t.cellText, fontSize: "13px", fontWeight: 900, fontFamily: "monospace" }}>{val}</span></div>; })}</div>;
     }
     return (
       <div className="overflow-hidden rounded-xl" style={{ backgroundColor: t.tableBg, border: `1px solid ${t.tableBorder}` }}>
         <div style={{ background: `linear-gradient(90deg,${t.headerBg},transparent)`, padding: "7px 12px", borderBottom: `1px solid ${t.rowBorder}` }}><div style={{ display: "flex", justifyContent: "space-between", fontSize: "8px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: t.headerText }}><span>Rank · {type === "warhead" ? "Team" : "Player"}</span><span>Kills</span></div></div>
-        {data.map((item, idx) => { const m = medalStyle(idx + 1); const label = type === "warhead" ? item.teamName : item.name; const val = type === "warhead" ? item.totalKills : item.kills; return <div key={label} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "7px 12px", borderBottom: `1px solid ${t.rowBorder}`, background: idx % 2 === 0 ? t.rowEven : t.rowOdd }}><span style={{ background: m.bg, color: m.color, borderRadius: "6px", width: "22px", height: "22px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 900, flexShrink: 0 }}>{idx + 1}</span><span style={{ flex: 1, color: t.cellText, fontSize: "12px", fontWeight: 700 }}>{label}</span><span style={{ color: idx === 0 ? t.accentColor : t.cellText, fontSize: "14px", fontWeight: 900, fontFamily: "monospace" }}>{val}</span><span style={{ color: t.legendText, fontSize: "9px" }}>{icon}</span></div>; })}
+        {data.map((item, idx) => { const m = medalStyle(idx + 1); const label = type === "warhead" ? item.teamName : item.name; const val = type === "warhead" ? item.totalKills : item.kills; return <div key={label} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "7px 12px", borderBottom: `1px solid ${t.rowBorder}`, background: idx % 2 === 0 ? t.rowEven : t.rowOdd }}><span style={{ background: m.bg, color: m.color, borderRadius: "6px", width: "22px", height: "22px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 900, flexShrink: 0 }}>{idx + 1}</span><span style={{ flex: 1, color: t.cellText, fontSize: "12px", fontWeight: 700 }}>{label}</span><span style={{ color: t.cellText, fontSize: "14px", fontWeight: 900, fontFamily: "monospace" }}>{val}</span><span style={{ color: t.legendText, fontSize: "9px" }}>{icon}</span></div>; })}
       </div>
     );
   };
