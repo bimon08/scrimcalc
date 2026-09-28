@@ -10,6 +10,7 @@ interface Props {
   disabled?: boolean;
   format?: Format;
   onFormatChange?: (f: Format) => void;
+  children?: React.ReactNode;
 }
 
 const FORMATS: { key: Format; label: string; icon: React.ReactNode }[] = [
@@ -33,7 +34,7 @@ const FORMATS: { key: Format; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
-export default function ExportPopover({ onShare, onDownload, disabled, format, onFormatChange }: Props) {
+export default function ExportPopover({ onShare, onDownload, disabled, format, onFormatChange, children }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -87,6 +88,14 @@ export default function ExportPopover({ onShare, onDownload, disabled, format, o
                   </button>
                 ))}
                 <div className="border-t border-white/10 mt-1" />
+              </>
+            )}
+
+            {/* Custom actions (e.g. Roster, Start slot) */}
+            {children && (
+              <>
+                {children}
+                <div className="border-t border-white/10" />
               </>
             )}
 

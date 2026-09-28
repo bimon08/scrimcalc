@@ -24,10 +24,10 @@ interface Props {
 
 export default function StandingsModal({ tournament, standings, standingsTab, groupFilter, setGroupFilter, onClose }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const activeIdxRef = useRef(0);
+  const [activeIdx, setActiveIdx] = useState(0);
   const [format, setFormat] = useState<Format>("landscape");
 
-  const handleActiveIndexChange = (i: number) => { activeIdxRef.current = i; };
+  const handleActiveIndexChange = (i: number) => { setActiveIdx(i); };
 
   // Group-aware filtering
   const filteredStandings = tournament.splitEnabled && groupFilter !== "all"
@@ -52,17 +52,92 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
   // Image capture
   const capture = useCallback(async (download: boolean) => {
-    const el = cardRef.current; if (!el) return;
+    const el = cardRef.current;
+    if (!el) {
+      toast.error("Card not ready");
+      return;
+    }
+
+    // Temporarily make outer container square-cornered so full background bleeds to all 4 edges without white corners
+    const prevRadius = el.style.borderRadius;
+    el.style.borderRadius = "0px";
+    const overlayEls = el.querySelectorAll<HTMLElement>(".absolute.inset-0");
+    const prevOverlayRadii: string[] = [];
+    overlayEls.forEach((o) => {
+      prevOverlayRadii.push(o.style.borderRadius);
+      o.style.borderRadius = "0px";
+    });
+
     try {
-      const canvas = await html2canvas(el, { useCORS: true, allowTaint: true, scale: window.devicePixelRatio || 2, backgroundColor: null, logging: false, imageTimeout: 5000 });
+      const canvas = await html2canvas(el, {
+        useCORS: true,
+        allowTaint: true,
+        scale: Math.max(2, typeof window !== "undefined" ? window.devicePixelRatio || 2 : 2),
+        backgroundColor: null,
+        logging: false,
+        imageTimeout: 5000,
+      });
+
+      const fileName = `${tournament.name || "standings"}-${standingsTab}.jpg`;
+
+      // 1. Direct download
+      if (download) {
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+        const a = document.createElement("a");
+        a.download = fileName;
+        a.href = dataUrl;
+        a.click();
+        toast.success("Downloaded!");
+        return;
+      }
+
+      // 2. Web Share API (mobile & supported browsers)
+      const jpegBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.95));
+      if (jpegBlob && typeof navigator !== "undefined" && navigator.share) {
+        const file = new File([jpegBlob], fileName, { type: "image/jpeg" });
+        if (navigator.canShare?.({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: tournament.name || "Standings" });
+            return;
+          } catch (shareErr: unknown) {
+            if ((shareErr as Error).name === "AbortError") return;
+            // Fall through to clipboard or download on share failure
+          }
+        }
+      }
+
+      // 3. Fallback: Copy to clipboard (Browsers require image/png for ClipboardItem)
+      if (typeof navigator !== "undefined" && navigator.clipboard && window.ClipboardItem) {
+        try {
+          const pngBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+          if (pngBlob) {
+            await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
+            toast.success("Image copied to clipboard!");
+            return;
+          }
+        } catch {
+          // Fall through to download
+        }
+      }
+
+      // 4. Fallback: Download file directly
       const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
-      if (download) { const a = document.createElement("a"); a.download = `${tournament.name}-${standingsTab}.jpg`; a.href = dataUrl; a.click(); toast.success("Downloaded!"); return; }
-      const res = await fetch(dataUrl); const blob = await res.blob();
-      const file = new File([blob], `${tournament.name}-${standingsTab}.jpg`, { type: "image/jpeg" });
-      if (navigator.share && navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: tournament.name || "Standings" });
-      else if (navigator.clipboard && window.ClipboardItem) { await navigator.clipboard.write([new ClipboardItem({ "image/jpeg": blob })]); toast.success("Copied!"); }
-      else { const a = document.createElement("a"); a.download = `${tournament.name}-${standingsTab}.jpg`; a.href = dataUrl; a.click(); }
-    } catch (err: unknown) { if ((err as Error).name !== "AbortError") toast.error("Failed"); }
+      const a = document.createElement("a");
+      a.download = fileName;
+      a.href = dataUrl;
+      a.click();
+      toast.success("Downloaded image");
+    } catch (err: unknown) {
+      if ((err as Error).name !== "AbortError") {
+        console.error("Capture error:", err);
+        toast.error("Failed to generate image");
+      }
+    } finally {
+      el.style.borderRadius = prevRadius;
+      overlayEls.forEach((o, i) => {
+        o.style.borderRadius = prevOverlayRadii[i] || "";
+      });
+    }
   }, [tournament.name, standingsTab]);
 
   // Helpers
@@ -107,10 +182,10 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     // ── banner: HUD/radar overlay — gradient rows, left stripe, plain rank number ──
     if (t.layout === "banner") return (
-      <div style={{ display: "flex", gap: "4px" }}>
+      <div style={{ display: "flex", gap: "4px", height: "100%", flex: 1, minHeight: 0 }}>
         {cols.map((col, ci) => (
-          <div key={ci} style={{ flex: 1, overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", padding: hPad, borderBottom: `1px solid ${ac}50`, marginBottom: "1px", fontFamily: "monospace" }}>
+          <div key={ci} style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", alignItems: "center", padding: hPad, borderBottom: `1px solid ${ac}50`, marginBottom: "1px", fontFamily: "monospace", flexShrink: 0 }}>
               <span style={{ width: "16px", fontSize: hFs, fontWeight: 800, textAlign: "center", color: ac }}>#</span>
               <span style={{ flex: 1, fontSize: hFs, fontWeight: 700, letterSpacing: "0.08em", color: t.headerText }}>TEAM</span>
               <span style={{ width: "14px", fontSize: hFs, textAlign: "center", color: t.headerText }}>🍗</span>
@@ -119,18 +194,20 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>K</span>
               <span style={{ width: "20px", fontSize: hFs, textAlign: "right", color: ac, fontWeight: 800 }}>T</span>
             </div>
-            {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
-              <div key={row.teamId} className="flex items-center" style={{ padding: rowPad, borderBottom: `1px solid ${t.rowBorder}`, background: `linear-gradient(90deg,${ac}${rank <= 3 ? "28" : "0c"} 0%,transparent 72%)`, position: "relative" }}>
-                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "2px", background: rank <= 3 ? ac : `${ac}28`, borderRadius: "0 1px 1px 0" }} />
-                <span style={{ width: "16px", textAlign: "center", color: rank <= 3 ? ac : t.rankDefaultText, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace" }}>{rank}</span>
-                <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", paddingLeft: "3px" }}>{row.teamName.slice(0, 7)}</span>
-                <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.placementPoints}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.7 }}>{row.matchCount}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.totalKills}</span>
-                <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
-              </div>
-            ); })}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+              {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
+                <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: rowPad, borderBottom: idx < col.length - 1 ? `1px solid ${t.rowBorder}` : "none", background: `linear-gradient(90deg,${ac}${rank <= 3 ? "28" : "0c"} 0%,transparent 72%)`, position: "relative", minHeight: 0 }}>
+                  <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "2px", background: rank <= 3 ? ac : `${ac}28`, borderRadius: "0 1px 1px 0" }} />
+                  <span style={{ width: "16px", textAlign: "center", color: rank <= 3 ? ac : t.rankDefaultText, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace" }}>{rank}</span>
+                  <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: "3px" }}>{row.teamName.slice(0, 7)}</span>
+                  <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.placementPoints}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.7 }}>{row.matchCount}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.totalKills}</span>
+                  <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
+                </div>
+              ); })}
+            </div>
           </div>
         ))}
       </div>
@@ -138,10 +215,10 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     // ── split: pill-card rows — each row is its own rounded card ──
     if (t.layout === "split") return (
-      <div style={{ display: "flex", gap: "4px" }}>
+      <div style={{ display: "flex", gap: "4px", height: "100%", flex: 1, minHeight: 0 }}>
         {cols.map((col, ci) => (
-          <div key={ci} style={{ flex: 1, overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", padding: hPad, marginBottom: "2px" }}>
+          <div key={ci} style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", alignItems: "center", padding: hPad, marginBottom: "2px", flexShrink: 0 }}>
               <span style={{ width: "16px", fontSize: hFs, fontWeight: 800, textAlign: "center", color: t.headerText }}>#</span>
               <span style={{ flex: 1, fontSize: hFs, fontWeight: 800, color: t.headerText }}>Team</span>
               <span style={{ width: "14px", fontSize: hFs, textAlign: "center", color: t.headerText }}>🍗</span>
@@ -150,11 +227,11 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>K</span>
               <span style={{ width: "20px", fontSize: hFs, textAlign: "right", color: ac }}>T</span>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "2px", minHeight: 0 }}>
               {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
-                <div key={row.teamId} className="flex items-center" style={{ padding: rowPad, background: t.tableBg, borderRadius: "5px", border: `1px solid ${rank <= 3 ? ac + "50" : t.tableBorder}`, boxShadow: rank <= 3 ? `0 0 5px ${ac}22` : "none" }}>
+                <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: rowPad, background: t.tableBg, borderRadius: "5px", border: `1px solid ${rank <= 3 ? ac + "50" : t.tableBorder}`, boxShadow: rank <= 3 ? `0 0 5px ${ac}22` : "none", minHeight: 0 }}>
                   <span className="inline-flex items-center justify-center font-black" style={{ width: rankSize, height: rankSize, fontSize: rankFs, background: getRankBg(rank), color: getRankText(rank), borderRadius: "50%", flexShrink: 0, marginRight: "3px" }}>{rank}</span>
-                  <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden" }}>{row.teamName.slice(0, 7)}</span>
+                  <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.teamName.slice(0, 7)}</span>
                   <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.placementPoints}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.7 }}>{row.matchCount}</span>
@@ -170,10 +247,10 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     // ── bold: brutalist — circle badges, top-3 left border, uniform rows ──
     if (t.layout === "bold") return (
-      <div style={{ display: "flex", gap: "6px" }}>
+      <div style={{ display: "flex", gap: "6px", height: "100%", flex: 1, minHeight: 0 }}>
         {cols.map((col, ci) => (
-          <div key={ci} className="flex-1 overflow-hidden" style={{ borderRadius: "12px", backgroundColor: t.tableBg, border: `2px solid ${ac}38`, overflow: "hidden" }}>
-            <div style={{ background: `linear-gradient(135deg,${ac}25,${ac}08)`, borderBottom: `2px solid ${ac}60`, padding: hPad, display: "flex", alignItems: "center" }}>
+          <div key={ci} className="flex-1 overflow-hidden" style={{ borderRadius: "12px", backgroundColor: t.tableBg, border: `2px solid ${ac}38`, display: "flex", flexDirection: "column" }}>
+            <div style={{ background: `linear-gradient(135deg,${ac}25,${ac}08)`, borderBottom: `2px solid ${ac}60`, padding: hPad, display: "flex", alignItems: "center", flexShrink: 0 }}>
               <span style={{ width: rankSize, fontSize: hFs, fontWeight: 900, textAlign: "center", color: ac }}>★</span>
               <span style={{ flex: 1, fontSize: hFs, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.08em", color: t.headerText }}>Team</span>
               <span style={{ width: "14px", fontSize: hFs, textAlign: "center", color: t.headerText }}>🍗</span>
@@ -182,17 +259,19 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>K</span>
               <span style={{ width: "20px", fontSize: hFs, textAlign: "right", color: ac, fontWeight: 900 }}>T</span>
             </div>
-            {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
-              <div key={row.teamId} className="flex items-center" style={{ padding: rowPad, borderBottom: `1px solid ${t.rowBorder}`, background: t.rowEven, borderLeft: `3px solid ${rank <= 3 ? ac : "transparent"}` }}>
-                <span className="inline-flex items-center justify-center font-black" style={{ width: rankSize, height: rankSize, fontSize: rankFs, background: getRankBg(rank), color: getRankText(rank), borderRadius: "50%", flexShrink: 0, marginRight: "3px" }}>{rank}</span>
-                <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden" }}>{row.teamName.slice(0, 7)}</span>
-                <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.placementPoints}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.7 }}>{row.matchCount}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.totalKills}</span>
-                <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
-              </div>
-            ); })}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+              {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
+                <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: rowPad, borderBottom: idx < col.length - 1 ? `1px solid ${t.rowBorder}` : "none", background: t.rowEven, borderLeft: `3px solid ${rank <= 3 ? ac : "transparent"}`, minHeight: 0 }}>
+                  <span className="inline-flex items-center justify-center font-black" style={{ width: rankSize, height: rankSize, fontSize: rankFs, background: getRankBg(rank), color: getRankText(rank), borderRadius: "50%", flexShrink: 0, marginRight: "3px" }}>{rank}</span>
+                  <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.teamName.slice(0, 7)}</span>
+                  <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.placementPoints}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.7 }}>{row.matchCount}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.totalKills}</span>
+                  <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
+                </div>
+              ); })}
+            </div>
           </div>
         ))}
       </div>
@@ -200,10 +279,10 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     // ── minimal: terminal clean — 01. numbering, no box, hairline dividers ──
     if (t.layout === "minimal") return (
-      <div style={{ display: "flex", gap: "8px" }}>
+      <div style={{ display: "flex", gap: "8px", height: "100%", flex: 1, minHeight: 0 }}>
         {cols.map((col, ci) => (
-          <div key={ci} style={{ flex: 1, overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", padding: hPad, borderBottom: `0.5px solid ${ac}55`, marginBottom: "1px" }}>
+          <div key={ci} style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", alignItems: "center", padding: hPad, borderBottom: `0.5px solid ${ac}55`, marginBottom: "1px", flexShrink: 0 }}>
               <span style={{ width: "20px", fontSize: hFs, color: t.legendText, fontFamily: "monospace" }}>#</span>
               <span style={{ flex: 1, fontSize: hFs, color: t.legendText, letterSpacing: "0.06em" }}>TEAM</span>
               <span style={{ width: "14px", fontSize: hFs, textAlign: "center", color: t.legendText }}>🍗</span>
@@ -212,17 +291,19 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.legendText, fontFamily: "monospace" }}>K</span>
               <span style={{ width: "20px", fontSize: hFs, textAlign: "right", color: ac, fontFamily: "monospace" }}>T</span>
             </div>
-            {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
-              <div key={row.teamId} className="flex items-center" style={{ padding: rowPad, borderBottom: `0.5px solid ${t.rowBorder}22`, background: "transparent" }}>
-                <span style={{ width: "20px", textAlign: "left", color: rank <= 3 ? ac : t.legendText, fontSize: fs, fontWeight: 900, fontFamily: "monospace" }}>{String(rank).padStart(2, "0")}.</span>
-                <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden" }}>{row.teamName.slice(0, 7)}</span>
-                <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.placementPoints}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.55 }}>{row.matchCount}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.totalKills}</span>
-                <span style={{ color: rank <= 3 ? ac : t.cellText, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
-              </div>
-            ); })}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+              {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
+                <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: rowPad, borderBottom: idx < col.length - 1 ? `0.5px solid ${t.rowBorder}22` : "none", background: "transparent", minHeight: 0 }}>
+                  <span style={{ width: "20px", textAlign: "left", color: rank <= 3 ? ac : t.legendText, fontSize: fs, fontWeight: 900, fontFamily: "monospace" }}>{String(rank).padStart(2, "0")}.</span>
+                  <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.teamName.slice(0, 7)}</span>
+                  <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.placementPoints}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.55 }}>{row.matchCount}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.totalKills}</span>
+                  <span style={{ color: rank <= 3 ? ac : t.cellText, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
+                </div>
+              ); })}
+            </div>
           </div>
         ))}
       </div>
@@ -230,10 +311,10 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     // ── accent-bar: leaderboard — score bar behind each row ──
     if (t.layout === "accent-bar") return (
-      <div style={{ display: "flex", gap: "6px" }}>
+      <div style={{ display: "flex", gap: "6px", height: "100%", flex: 1, minHeight: 0 }}>
         {cols.map((col, ci) => (
-          <div key={ci} className="flex-1 overflow-hidden" style={{ borderRadius: "8px", backgroundColor: t.tableBg, border: `1px solid ${t.tableBorder}`, overflow: "hidden" }}>
-            <div style={{ backgroundColor: t.headerBg, borderBottom: `1px solid ${t.headerBorder}`, padding: hPad, display: "flex", alignItems: "center" }}>
+          <div key={ci} className="flex-1 overflow-hidden" style={{ borderRadius: "8px", backgroundColor: t.tableBg, border: `1px solid ${t.tableBorder}`, display: "flex", flexDirection: "column" }}>
+            <div style={{ backgroundColor: t.headerBg, borderBottom: `1px solid ${t.headerBorder}`, padding: hPad, display: "flex", alignItems: "center", flexShrink: 0 }}>
               <span style={{ width: "18px", fontSize: hFs, fontWeight: 800, textAlign: "center", color: t.headerText }}>#</span>
               <span style={{ flex: 1, fontSize: hFs, fontWeight: 800, color: t.headerText }}>Team</span>
               <span style={{ width: "14px", fontSize: hFs, textAlign: "center", color: t.headerText }}>🍗</span>
@@ -242,21 +323,23 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>K</span>
               <span style={{ width: "20px", fontSize: hFs, textAlign: "right", color: ac }}>T</span>
             </div>
-            {col.map((row, idx) => { const rank = ci * perCol + idx + 1; const barPct = Math.round((row.totalPoints / maxScore) * 100); return (
-              <div key={row.teamId} className="flex items-center" style={{ padding: rowPad, borderBottom: `1px solid ${t.rowBorder}`, background: idx % 2 === 0 ? t.rowEven : t.rowOdd, position: "relative", overflow: "hidden" }}>
-                {/* Score progress bar */}
-                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${barPct}%`, background: `linear-gradient(90deg,${ac}1c 0%,${ac}06 100%)`, pointerEvents: "none" }} />
-                {/* Left accent stripe */}
-                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "3px", background: rank <= 3 ? ac : "transparent" }} />
-                <span className="inline-flex items-center justify-center rounded font-black" style={{ width: rankSize, height: rankSize, fontSize: rankFs, background: getRankBg(rank), color: getRankText(rank), flexShrink: 0, marginRight: "3px", marginLeft: "5px", position: "relative" }}>{rank}</span>
-                <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", position: "relative" }}>{row.teamName.slice(0, 7)}</span>
-                <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: dinCol(row.chickenDinners), position: "relative" }}>{row.chickenDinners}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", position: "relative" }}>{row.placementPoints}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.7, position: "relative" }}>{row.matchCount}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", position: "relative" }}>{row.totalKills}</span>
-                <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right", position: "relative" }}>{row.totalPoints}</span>
-              </div>
-            ); })}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+              {col.map((row, idx) => { const rank = ci * perCol + idx + 1; const barPct = Math.round((row.totalPoints / maxScore) * 100); return (
+                <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: rowPad, borderBottom: idx < col.length - 1 ? `1px solid ${t.rowBorder}` : "none", background: idx % 2 === 0 ? t.rowEven : t.rowOdd, position: "relative", overflow: "hidden", minHeight: 0 }}>
+                  {/* Score progress bar */}
+                  <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${barPct}%`, background: `linear-gradient(90deg,${ac}1c 0%,${ac}06 100%)`, pointerEvents: "none" }} />
+                  {/* Left accent stripe */}
+                  <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "3px", background: rank <= 3 ? ac : "transparent" }} />
+                  <span className="inline-flex items-center justify-center rounded font-black" style={{ width: rankSize, height: rankSize, fontSize: rankFs, background: getRankBg(rank), color: getRankText(rank), flexShrink: 0, marginRight: "3px", marginLeft: "5px", position: "relative" }}>{rank}</span>
+                  <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", position: "relative" }}>{row.teamName.slice(0, 7)}</span>
+                  <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: dinCol(row.chickenDinners), position: "relative" }}>{row.chickenDinners}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", position: "relative" }}>{row.placementPoints}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.7, position: "relative" }}>{row.matchCount}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", position: "relative" }}>{row.totalKills}</span>
+                  <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right", position: "relative" }}>{row.totalPoints}</span>
+                </div>
+              ); })}
+            </div>
           </div>
         ))}
       </div>
@@ -264,10 +347,10 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     // ── compact: military terminal — [01] rank, monospace grid, accent header ──
     if (t.layout === "compact") return (
-      <div style={{ display: "flex", gap: "4px" }}>
+      <div style={{ display: "flex", gap: "4px", height: "100%", flex: 1, minHeight: 0 }}>
         {cols.map((col, ci) => (
-          <div key={ci} className="flex-1 overflow-hidden" style={{ backgroundColor: t.tableBg, border: `1px solid ${t.tableBorder}`, borderRadius: "4px", overflow: "hidden" }}>
-            <div style={{ background: `${ac}28`, borderBottom: `1px solid ${ac}`, padding: hPad, display: "flex", alignItems: "center", fontFamily: "monospace" }}>
+          <div key={ci} className="flex-1 overflow-hidden" style={{ backgroundColor: t.tableBg, border: `1px solid ${t.tableBorder}`, borderRadius: "4px", display: "flex", flexDirection: "column" }}>
+            <div style={{ background: `${ac}28`, borderBottom: `1px solid ${ac}`, padding: hPad, display: "flex", alignItems: "center", fontFamily: "monospace", flexShrink: 0 }}>
               <span style={{ width: "24px", fontSize: hFs, fontWeight: 900, textAlign: "center", color: ac }}>RK</span>
               <span style={{ flex: 1, fontSize: hFs, fontWeight: 800, color: t.headerText }}>SQUAD</span>
               <span style={{ width: "14px", fontSize: hFs, textAlign: "center", color: t.headerText }}>🍗</span>
@@ -276,17 +359,19 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>EL</span>
               <span style={{ width: "20px", fontSize: hFs, textAlign: "right", color: ac, fontWeight: 900 }}>PTS</span>
             </div>
-            {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
-              <div key={row.teamId} className="flex items-center" style={{ padding: rowPad, borderBottom: `1px solid ${t.rowBorder}`, background: idx % 2 === 0 ? t.rowEven : t.rowOdd, fontFamily: "monospace" }}>
-                <span style={{ width: "24px", textAlign: "center", color: rank <= 3 ? ac : t.rankDefaultText, fontSize: fs, fontWeight: 700 }}>[{String(rank).padStart(2, "0")}]</span>
-                <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden" }}>{row.teamName.slice(0, 7)}</span>
-                <span style={{ width: "14px", textAlign: "center", fontSize: fs, color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs }}>{row.placementPoints}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, opacity: 0.7 }}>{row.matchCount}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs }}>{row.totalKills}</span>
-                <span style={{ color: rank <= 3 ? ac : t.cellText, fontSize: scoreFs, fontWeight: 900, width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
-              </div>
-            ); })}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+              {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
+                <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: rowPad, borderBottom: idx < col.length - 1 ? `1px solid ${t.rowBorder}` : "none", background: idx % 2 === 0 ? t.rowEven : t.rowOdd, fontFamily: "monospace", minHeight: 0 }}>
+                  <span style={{ width: "24px", textAlign: "center", color: rank <= 3 ? ac : t.rankDefaultText, fontSize: fs, fontWeight: 700 }}>[{String(rank).padStart(2, "0")}]</span>
+                  <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.teamName.slice(0, 7)}</span>
+                  <span style={{ width: "14px", textAlign: "center", fontSize: fs, color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs }}>{row.placementPoints}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, opacity: 0.7 }}>{row.matchCount}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs }}>{row.totalKills}</span>
+                  <span style={{ color: rank <= 3 ? ac : t.cellText, fontSize: scoreFs, fontWeight: 900, width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
+                </div>
+              ); })}
+            </div>
           </div>
         ))}
       </div>
@@ -294,10 +379,10 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     // ── default: classic glass card — alternating rows, square rank badge ──
     return (
-      <div style={{ display: "flex", gap: "6px" }}>
+      <div style={{ display: "flex", gap: "6px", height: "100%" }}>
         {cols.map((col, ci) => (
-          <div key={ci} className="flex-1 overflow-hidden" style={{ borderRadius: "8px", backgroundColor: t.tableBg, border: `1px solid ${t.tableBorder}` }}>
-            <div style={{ backgroundColor: t.headerBg, borderBottom: `1px solid ${t.headerBorder}`, padding: hPad, display: "flex", alignItems: "center" }}>
+          <div key={ci} className="flex-1 overflow-hidden" style={{ borderRadius: "8px", backgroundColor: t.tableBg, border: `1px solid ${t.tableBorder}`, display: "flex", flexDirection: "column" }}>
+            <div style={{ backgroundColor: t.headerBg, borderBottom: `1px solid ${t.headerBorder}`, padding: hPad, display: "flex", alignItems: "center", flexShrink: 0 }}>
               <span style={{ width: "18px", fontSize: hFs, fontWeight: 800, textTransform: "uppercase", textAlign: "center", color: t.headerText }}>#</span>
               <span style={{ flex: 1, fontSize: hFs, fontWeight: 800, textTransform: "uppercase", color: t.headerText }}>Team</span>
               <span style={{ width: "14px", fontSize: hFs, fontWeight: 800, textAlign: "center", color: t.headerText }}>🍗</span>
@@ -306,17 +391,19 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               <span style={{ width: "16px", fontSize: hFs, fontWeight: 800, textTransform: "uppercase", textAlign: "center", color: t.headerText }}>K</span>
               <span style={{ width: "20px", fontSize: hFs, fontWeight: 800, textTransform: "uppercase", textAlign: "right", color: ac }}>T</span>
             </div>
-            {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
-              <div key={row.teamId} className="flex items-center" style={{ padding: rowPad, borderBottom: `1px solid ${t.rowBorder}`, background: idx % 2 === 0 ? t.rowEven : t.rowOdd }}>
-                <span className="inline-flex items-center justify-center rounded font-black" style={{ width: rankSize, height: rankSize, fontSize: rankFs, background: getRankBg(rank), color: getRankText(rank), flexShrink: 0, marginRight: "3px" }}>{rank}</span>
-                <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden" }}>{row.teamName.slice(0, 7)}</span>
-                <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontWeight: 700, fontFamily: "monospace", color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontWeight: 600, fontFamily: "monospace" }}>{row.placementPoints}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontWeight: 600, fontFamily: "monospace", opacity: 0.7 }}>{row.matchCount}</span>
-                <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontWeight: 600, fontFamily: "monospace" }}>{row.totalKills}</span>
-                <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
-              </div>
-            ); })}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+              {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
+                <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: "0 2px", borderBottom: idx < col.length - 1 ? `1px solid ${t.rowBorder}` : "none", background: idx % 2 === 0 ? t.rowEven : t.rowOdd, minHeight: 0 }}>
+                  <span className="inline-flex items-center justify-center rounded font-black" style={{ width: rankSize, height: rankSize, fontSize: rankFs, background: getRankBg(rank), color: getRankText(rank), flexShrink: 0, marginRight: "3px" }}>{rank}</span>
+                  <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.teamName.slice(0, 7)}</span>
+                  <span style={{ width: "14px", textAlign: "center", fontSize: fs, fontWeight: 700, fontFamily: "monospace", color: dinCol(row.chickenDinners) }}>{row.chickenDinners}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontWeight: 600, fontFamily: "monospace" }}>{row.placementPoints}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontWeight: 600, fontFamily: "monospace", opacity: 0.7 }}>{row.matchCount}</span>
+                  <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontWeight: 600, fontFamily: "monospace" }}>{row.totalKills}</span>
+                  <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
+                </div>
+              ); })}
+            </div>
           </div>
         ))}
       </div>
@@ -332,19 +419,18 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
     const cols: typeof filteredStandings[] = [];
     for (let c = 0; c < numCols; c++) { const s = filteredStandings.slice(c * perCol, (c + 1) * perCol); if (s.length > 0) cols.push(s); }
     const isBold = t.layout === "bold", isMinimal = t.layout === "minimal", isAccentBar = t.layout === "accent-bar";
-    const fs       = perCol > 12 ? "4.5px" : perCol > 10 ? "5px" : perCol > 7 ? "5.5px" : "6.5px";
-    const scoreFs  = perCol > 12 ? "5px"   : perCol > 10 ? "5.5px" : perCol > 7 ? "6px"   : "7px";
-    const rankSize = perCol > 12 ? "8px"   : perCol > 10 ? "9px"  : perCol > 7 ? "10px"  : "12px";
-    const rankFs   = perCol > 12 ? "4px"   : perCol > 10 ? "4.5px" : perCol > 7 ? "5px"  : "6px";
-    const headerPad = "0.5px 2px";
-    const headerFs  = "5px";
-    const rowPad    = perCol > 12 ? "0px 2px" : "0.5px 2px";
+    const fs       = perCol > 14 ? "5px"   : perCol > 11 ? "5.5px" : perCol > 8 ? "6.2px" : perCol > 5 ? "7px"   : "8px";
+    const scoreFs  = perCol > 14 ? "5.2px" : perCol > 11 ? "6px"   : perCol > 8 ? "6.8px" : perCol > 5 ? "7.5px" : "8.5px";
+    const rankSize = perCol > 14 ? "9px"   : perCol > 11 ? "10px"  : perCol > 8 ? "11px"  : perCol > 5 ? "13px"  : "15px";
+    const rankFs   = perCol > 14 ? "4.5px" : perCol > 11 ? "5px"   : perCol > 8 ? "5.5px" : perCol > 5 ? "6.5px" : "7.5px";
+    const headerPad = perCol > 11 ? "1px 2px" : "1.5px 3px";
+    const headerFs  = perCol > 11 ? "5px" : "6px";
     const show3cols = false;
     const getRankBg = (r: number) => r === 1 ? t.rank1 : r === 2 ? t.rank2 : r === 3 ? t.rank3 : t.rankDefault;
     const getRankText = (r: number) => r === 1 ? "#000" : r === 2 ? "#000" : r === 3 ? "#fff" : t.rankDefaultText;
     const hTextColor = isMinimal ? t.legendText : t.headerText;
     return (
-      <div style={{ display: "flex", gap: "3px", height: "100%" }}>
+      <div style={{ display: "flex", gap: "3px", height: "100%", flex: 1, minHeight: 0 }}>
         {cols.map((col, ci) => (
           <div key={ci} style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", borderRadius: "6px", backgroundColor: isMinimal ? "transparent" : t.tableBg, border: isMinimal ? "none" : isBold ? `2px solid ${t.accentColor}` : `1px solid ${t.tableBorder}` }}>
             <div style={{ flexShrink: 0, backgroundColor: isMinimal ? "transparent" : t.headerBg, borderBottom: `1px solid ${t.headerBorder}`, padding: headerPad, display: "flex", alignItems: "center" }}>
@@ -355,17 +441,17 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               {!show3cols && <span style={{ width: "13px", fontSize: headerFs, fontWeight: 800, textAlign: "center", color: hTextColor }}>K</span>}
               <span style={{ width: "15px", fontSize: headerFs, fontWeight: 800, textAlign: "right", color: t.accentColor }}>T</span>
             </div>
-            <div style={{ flex: 1, overflow: "hidden" }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {col.map((row, idx) => {
                 const rank = ci * perCol + idx + 1;
                 return (
-                  <div key={row.teamId} className="flex items-center" style={{ padding: rowPad, borderBottom: `1px solid ${t.rowBorder}`, background: idx % 2 === 0 ? t.rowEven : t.rowOdd }}>
+                  <div key={row.teamId} style={{ flex: 1, display: "flex", alignItems: "center", padding: "0 2px", borderBottom: idx < col.length - 1 ? `1px solid ${t.rowBorder}` : "none", background: idx % 2 === 0 ? t.rowEven : t.rowOdd, minHeight: 0 }}>
                     {isAccentBar && <div style={{ width: "2px", alignSelf: "stretch", background: rank <= 3 ? t.accentColor : "transparent", marginRight: "2px" }} />}
                     {isMinimal
                       ? <span style={{ width: rankSize, textAlign: "center", color: rank <= 3 ? t.accentColor : t.legendText, fontSize: fs, fontWeight: 900, fontFamily: "monospace" }}>{rank}</span>
                       : <span className="inline-flex items-center justify-center rounded font-black" style={{ width: rankSize, height: rankSize, fontSize: rankFs, background: getRankBg(rank), color: getRankText(rank), flexShrink: 0, marginRight: "2px" }}>{rank}</span>
                     }
-                    <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden" }}>{row.teamName}</span>
+                    <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.teamName}</span>
                     {!show3cols && <span style={{ width: "13px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: row.chickenDinners > 0 ? "#facc15" : "rgba(255,255,255,0.15)" }}>{row.chickenDinners}</span>}
                     <span style={{ width: "14px", textAlign: "center", color: t.cellText, fontSize: fs, fontWeight: 600, fontFamily: "monospace" }}>{row.placementPoints}</span>
                     {!show3cols && <span style={{ width: "13px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.totalKills}</span>}
@@ -411,16 +497,16 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
     if (!isLandscape) {
       const ac = t.accentColor;
       const tableContent = (
-        <>
+        <div style={{ flex: 1, overflow: "hidden", minHeight: 0, height: "100%", display: "flex", flexDirection: "column" }}>
           {standingsTab === "table" && renderTableSquare(t)}
           {standingsTab === "warhead" && renderList(t, warheadData, "warhead")}
           {standingsTab === "fraggers" && renderList(t, topFraggers, "fraggers")}
-        </>
+        </div>
       );
 
       // ── BANNER: prominent accent top-bar containing title ──
       if (t.layout === "banner") return (
-        <div key={t.id} ref={cardIdx === activeIdxRef.current ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: sqAspect, scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
+        <div key={t.id} ref={cardIdx === activeIdx ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: sqAspect, scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
           {t.overlay !== "none" && <div className="absolute inset-0" style={{ background: t.overlay }} />}
           <div className="relative z-10 h-full flex flex-col">
             {/* Accent top bar — the defining feature of banner layout */}
@@ -436,7 +522,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
       // ── SPLIT: vertical sidebar title on the left ──
       if (t.layout === "split") return (
-        <div key={t.id} ref={cardIdx === activeIdxRef.current ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: sqAspect, scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
+        <div key={t.id} ref={cardIdx === activeIdx ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: sqAspect, scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
           {t.overlay !== "none" && <div className="absolute inset-0" style={{ background: t.overlay }} />}
           <div className="relative z-10 h-full" style={{ display: "flex" }}>
             {/* Left sidebar with vertical title */}
@@ -459,7 +545,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
       // ── BOLD: large centered title + accent divider ──
       if (t.layout === "bold") return (
-        <div key={t.id} ref={cardIdx === activeIdxRef.current ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: sqAspect, scrollSnapAlign: "center", borderRadius: "24px", background: t.bg, border: `3px solid ${ac}40`, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
+        <div key={t.id} ref={cardIdx === activeIdx ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: sqAspect, scrollSnapAlign: "center", borderRadius: "24px", background: t.bg, border: `3px solid ${ac}40`, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
           {t.overlay !== "none" && <div className="absolute inset-0" style={{ background: t.overlay, borderRadius: "20px" }} />}
           <div className="relative z-10 h-full flex flex-col px-4">
             {/* Large title block */}
@@ -479,7 +565,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
       // ── MINIMAL: floating text, no box, airy layout ──
       if (t.layout === "minimal") return (
-        <div key={t.id} ref={cardIdx === activeIdxRef.current ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: sqAspect, scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
+        <div key={t.id} ref={cardIdx === activeIdx ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: sqAspect, scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
           {t.overlay !== "none" && <div className="absolute inset-0" style={{ background: t.overlay }} />}
           <div className="relative z-10 h-full flex flex-col" style={{ padding: "14px 14px 10px" }}>
             <div style={{ flexShrink: 0, marginBottom: "8px" }}>
@@ -495,7 +581,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
       // ── ACCENT-BAR: full-card accent gradient tint, pill title ──
       if (t.layout === "accent-bar") return (
-        <div key={t.id} ref={cardIdx === activeIdxRef.current ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: sqAspect, scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, borderLeft: `6px solid ${ac}`, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
+        <div key={t.id} ref={cardIdx === activeIdx ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: sqAspect, scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, borderLeft: `6px solid ${ac}`, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
           {t.overlay !== "none" && <div className="absolute inset-0" style={{ background: t.overlay }} />}
           {/* Full-card left-to-right accent tint */}
           <div className="absolute inset-0" style={{ background: `linear-gradient(90deg,${ac}20 0%,${ac}06 40%,transparent 100%)` }} />
@@ -514,7 +600,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
       // ── COMPACT: dense terminal — inline title + count ──
       if (t.layout === "compact") return (
-        <div key={t.id} ref={cardIdx === activeIdxRef.current ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: sqAspect, scrollSnapAlign: "center", borderRadius: "12px", background: t.bg, border: `1px solid ${ac}25`, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
+        <div key={t.id} ref={cardIdx === activeIdx ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: sqAspect, scrollSnapAlign: "center", borderRadius: "12px", background: t.bg, border: `1px solid ${ac}25`, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
           {t.overlay !== "none" && <div className="absolute inset-0" style={{ background: t.overlay }} />}
           <div className="relative z-10 h-full flex flex-col" style={{ padding: "8px 10px" }}>
             {/* Dense title row */}
@@ -535,7 +621,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
       // ── DEFAULT: standard glass card ──
       return (
-        <div key={t.id} ref={cardIdx === activeIdxRef.current ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: sqAspect, scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
+        <div key={t.id} ref={cardIdx === activeIdx ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: sqAspect, scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
           {t.overlay !== "none" && <div className="absolute inset-0" style={{ background: t.overlay, borderRadius: "20px" }} />}
           <div className="relative z-10 px-3 py-3 h-full flex flex-col">
             {renderTitle(t)}
@@ -549,7 +635,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     const ac = t.accentColor;
     const lsContent = (
-      <div style={{ flex: 1, overflow: "hidden", minHeight: 0, height: "100%" }}>
+      <div style={{ flex: 1, overflow: "hidden", minHeight: 0, height: "100%", display: "flex", flexDirection: "column" }}>
         {standingsTab === "table" && renderTableLandscape(t)}
         {standingsTab === "warhead" && renderList(t, warheadData, "warhead")}
         {standingsTab === "fraggers" && renderList(t, topFraggers, "fraggers")}
@@ -558,7 +644,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     // banner landscape: thick left-bar accent header (no side-by-side)
     if (t.layout === "banner") return (
-      <div key={t.id} ref={cardIdx === activeIdxRef.current ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: "16/9", scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
+      <div key={t.id} ref={cardIdx === activeIdx ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: "16/9", scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
         {t.overlay !== "none" && <div className="absolute inset-0" style={{ background: t.overlay }} />}
         <div className="relative z-10 h-full flex flex-col">
           <div style={{ background: `linear-gradient(90deg,${ac}55 0%,${ac}18 65%,transparent 100%)`, borderBottom: `2px solid ${ac}`, borderLeft: `5px solid ${ac}`, padding: "5px 10px", flexShrink: 0 }}>
@@ -573,7 +659,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     // split landscape: left sidebar with rotated title
     if (t.layout === "split") return (
-      <div key={t.id} ref={cardIdx === activeIdxRef.current ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: "16/9", scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
+      <div key={t.id} ref={cardIdx === activeIdx ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: "16/9", scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
         {t.overlay !== "none" && <div className="absolute inset-0" style={{ background: t.overlay }} />}
         <div className="relative z-10 h-full" style={{ display: "flex" }}>
           <div style={{ width: "22px", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", padding: "6px 0", background: `${ac}25`, borderRight: `2px solid ${ac}50` }}>
@@ -592,7 +678,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     // bold landscape: centered title + dividers
     if (t.layout === "bold") return (
-      <div key={t.id} ref={cardIdx === activeIdxRef.current ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: "16/9", scrollSnapAlign: "center", borderRadius: "24px", border: `2px solid ${ac}40`, background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
+      <div key={t.id} ref={cardIdx === activeIdx ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: "16/9", scrollSnapAlign: "center", borderRadius: "24px", border: `2px solid ${ac}40`, background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
         {t.overlay !== "none" && <div className="absolute inset-0" style={{ background: t.overlay, borderRadius: "20px" }} />}
         <div className="relative z-10 h-full flex flex-col" style={{ padding: "6px 12px" }}>
           <div style={{ flexShrink: 0, textAlign: "center", marginBottom: "4px", borderBottom: `1px solid ${ac}50`, paddingBottom: "4px" }}>
@@ -607,7 +693,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     // minimal landscape: thin underline title, floating data
     if (t.layout === "minimal") return (
-      <div key={t.id} ref={cardIdx === activeIdxRef.current ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: "16/9", scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
+      <div key={t.id} ref={cardIdx === activeIdx ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: "16/9", scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
         {t.overlay !== "none" && <div className="absolute inset-0" style={{ background: t.overlay }} />}
         <div className="relative z-10 h-full flex flex-col" style={{ padding: "8px 12px" }}>
           <div style={{ flexShrink: 0, marginBottom: "5px" }}>
@@ -623,7 +709,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     // accent-bar landscape: pill title + card tint
     if (t.layout === "accent-bar") return (
-      <div key={t.id} ref={cardIdx === activeIdxRef.current ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: "16/9", scrollSnapAlign: "center", borderRadius: "20px", borderLeft: `5px solid ${ac}`, background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
+      <div key={t.id} ref={cardIdx === activeIdx ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: "16/9", scrollSnapAlign: "center", borderRadius: "20px", borderLeft: `5px solid ${ac}`, background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
         {t.overlay !== "none" && <div className="absolute inset-0" style={{ background: t.overlay }} />}
         <div className="absolute inset-0" style={{ background: `linear-gradient(90deg,${ac}18 0%,transparent 50%)` }} />
         <div className="relative z-10 h-full flex flex-col" style={{ padding: "7px 10px" }}>
@@ -639,7 +725,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     // compact landscape: dense terminal header
     if (t.layout === "compact") return (
-      <div key={t.id} ref={cardIdx === activeIdxRef.current ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: "16/9", scrollSnapAlign: "center", borderRadius: "10px", border: `1px solid ${ac}25`, background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
+      <div key={t.id} ref={cardIdx === activeIdx ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: "16/9", scrollSnapAlign: "center", borderRadius: "10px", border: `1px solid ${ac}25`, background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}) }}>
         {t.overlay !== "none" && <div className="absolute inset-0" style={{ background: t.overlay }} />}
         <div className="relative z-10 h-full flex flex-col" style={{ padding: "6px 8px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px", flexShrink: 0, borderBottom: `1px solid ${ac}30`, paddingBottom: "4px", fontFamily: "monospace" }}>
@@ -657,7 +743,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
     // default landscape: title + badge side by side
     return (
-      <div key={t.id} ref={cardIdx === activeIdxRef.current ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: "16/9", scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}), ...borderDecor }}>
+      <div key={t.id} ref={cardIdx === activeIdx ? cardRef : undefined} className="shrink-0 relative overflow-hidden" style={{ width: "calc(100vw - 48px)", aspectRatio: "16/9", scrollSnapAlign: "center", borderRadius: "20px", background: t.bg, ...(t.bgImage ? { backgroundImage: `url(${t.bgImage})`, backgroundSize: "cover", backgroundPosition: "center" } : {}), ...borderDecor }}>
         {t.overlay !== "none" && <div className="absolute inset-0" style={{ background: t.overlay, borderRadius: "20px" }} />}
         <div className="relative z-10 h-full flex flex-col" style={{ padding: "10px 12px" }}>
           <div className="flex items-center justify-between" style={{ marginBottom: "6px", flexShrink: 0 }}>
