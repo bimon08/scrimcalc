@@ -210,6 +210,8 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
     const getRankText = (_r: number) => t.rankDefaultText;
     const dinCol      = (n: number) => n > 0 ? "#facc15" : "rgba(255,255,255,0.15)";
     const maxScore    = filteredStandings[0]?.totalPoints || 1;
+    const maxPtsDigits = Math.max(1, ...filteredStandings.map(r => String(r.totalPoints).length));
+    const tColWidth    = maxPtsDigits >= 3 ? "20px" : maxPtsDigits === 2 ? "15px" : "12px";
 
     // ── banner: HUD/radar overlay — gradient rows, left stripe, plain rank number ──
     if (t.layout === "banner") return (
@@ -223,7 +225,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>PP</span>
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>MP</span>
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>K</span>
-              <span style={{ width: "20px", fontSize: hFs, textAlign: "right", color: ac, fontWeight: 800 }}>T</span>
+              <span style={{ width: tColWidth, fontSize: hFs, textAlign: "center", color: ac, fontWeight: 800 }}>T</span>
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
@@ -235,7 +237,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.placementPoints}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.7 }}>{row.matchCount}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.totalKills}</span>
-                  <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
+                  <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: tColWidth, textAlign: "center" }}>{row.totalPoints}</span>
                 </div>
               ); })}
             </div>
@@ -256,7 +258,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>PP</span>
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>MP</span>
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>K</span>
-              <span style={{ width: "20px", fontSize: hFs, textAlign: "right", color: ac }}>T</span>
+              <span style={{ width: tColWidth, fontSize: hFs, textAlign: "center", color: ac }}>T</span>
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "2px", minHeight: 0 }}>
               {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
@@ -267,7 +269,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.placementPoints}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.7 }}>{row.matchCount}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.totalKills}</span>
-                  <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
+                  <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: tColWidth, textAlign: "center" }}>{row.totalPoints}</span>
                 </div>
               ); })}
             </div>
@@ -288,7 +290,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>PP</span>
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>MP</span>
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>K</span>
-              <span style={{ width: "20px", fontSize: hFs, textAlign: "right", color: ac, fontWeight: 900 }}>T</span>
+              <span style={{ width: tColWidth, fontSize: hFs, textAlign: "center", color: ac, fontWeight: 900 }}>T</span>
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
@@ -299,7 +301,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.placementPoints}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.7 }}>{row.matchCount}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.totalKills}</span>
-                  <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
+                  <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: tColWidth, textAlign: "center" }}>{row.totalPoints}</span>
                 </div>
               ); })}
             </div>
@@ -320,7 +322,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.legendText, fontFamily: "monospace" }}>PP</span>
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.legendText, fontFamily: "monospace" }}>MP</span>
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.legendText, fontFamily: "monospace" }}>K</span>
-              <span style={{ width: "20px", fontSize: hFs, textAlign: "right", color: ac, fontFamily: "monospace" }}>T</span>
+              <span style={{ width: tColWidth, fontSize: hFs, textAlign: "center", color: ac, fontFamily: "monospace" }}>T</span>
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
@@ -331,7 +333,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.placementPoints}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.55 }}>{row.matchCount}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.totalKills}</span>
-                  <span style={{ color: t.cellText, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
+                  <span style={{ color: t.cellText, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: tColWidth, textAlign: "center" }}>{row.totalPoints}</span>
                 </div>
               ); })}
             </div>
@@ -352,7 +354,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>PP</span>
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>MP</span>
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>K</span>
-              <span style={{ width: "20px", fontSize: hFs, textAlign: "right", color: ac }}>T</span>
+              <span style={{ width: tColWidth, fontSize: hFs, textAlign: "center", color: ac }}>T</span>
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {col.map((row, idx) => { const rank = ci * perCol + idx + 1; const barPct = Math.round((row.totalPoints / maxScore) * 100); return (
@@ -367,7 +369,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", position: "relative" }}>{row.placementPoints}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", opacity: 0.7, position: "relative" }}>{row.matchCount}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace", position: "relative" }}>{row.totalKills}</span>
-                  <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right", position: "relative" }}>{row.totalPoints}</span>
+                  <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: tColWidth, textAlign: "center", position: "relative" }}>{row.totalPoints}</span>
                 </div>
               ); })}
             </div>
@@ -388,7 +390,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>PP</span>
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>MP</span>
               <span style={{ width: "16px", fontSize: hFs, textAlign: "center", color: t.headerText }}>EL</span>
-              <span style={{ width: "20px", fontSize: hFs, textAlign: "right", color: ac, fontWeight: 900 }}>PTS</span>
+              <span style={{ width: tColWidth, fontSize: hFs, textAlign: "center", color: ac, fontWeight: 900 }}>PTS</span>
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
@@ -399,7 +401,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs }}>{row.placementPoints}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, opacity: 0.7 }}>{row.matchCount}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs }}>{row.totalKills}</span>
-                  <span style={{ color: t.cellText, fontSize: scoreFs, fontWeight: 900, width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
+                  <span style={{ color: t.cellText, fontSize: scoreFs, fontWeight: 900, width: tColWidth, textAlign: "center" }}>{row.totalPoints}</span>
                 </div>
               ); })}
             </div>
@@ -420,7 +422,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               <span style={{ width: "16px", fontSize: hFs, fontWeight: 800, textTransform: "uppercase", textAlign: "center", color: t.headerText }}>PP</span>
               <span style={{ width: "16px", fontSize: hFs, fontWeight: 800, textTransform: "uppercase", textAlign: "center", color: t.headerText }}>MP</span>
               <span style={{ width: "16px", fontSize: hFs, fontWeight: 800, textTransform: "uppercase", textAlign: "center", color: t.headerText }}>K</span>
-              <span style={{ width: "20px", fontSize: hFs, fontWeight: 800, textTransform: "uppercase", textAlign: "right", color: ac }}>T</span>
+              <span style={{ width: tColWidth, fontSize: hFs, fontWeight: 800, textTransform: "uppercase", textAlign: "center", color: ac }}>T</span>
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {col.map((row, idx) => { const rank = ci * perCol + idx + 1; return (
@@ -431,7 +433,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontWeight: 600, fontFamily: "monospace" }}>{row.placementPoints}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontWeight: 600, fontFamily: "monospace", opacity: 0.7 }}>{row.matchCount}</span>
                   <span style={{ width: "16px", textAlign: "center", color: t.cellText, fontSize: fs, fontWeight: 600, fontFamily: "monospace" }}>{row.totalKills}</span>
-                  <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: "20px", textAlign: "right" }}>{row.totalPoints}</span>
+                  <span style={{ color: ac, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace", width: tColWidth, textAlign: "center" }}>{row.totalPoints}</span>
                 </div>
               ); })}
             </div>
@@ -457,6 +459,8 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
     const headerPad = perCol > 11 ? "1px 2px" : "1.5px 3px";
     const headerFs  = perCol > 11 ? "5px" : "6px";
     const show3cols = false;
+    const maxPtsDigits = Math.max(1, ...filteredStandings.map(r => String(r.totalPoints).length));
+    const tColWidth    = maxPtsDigits >= 3 ? "16px" : maxPtsDigits === 2 ? "13px" : "11px";
     const getRankBg = (_r: number) => t.rankDefault;
     const getRankText = (_r: number) => t.rankDefaultText;
     const hTextColor = isMinimal ? t.legendText : t.headerText;
@@ -470,7 +474,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
               {!show3cols && <span style={{ width: "13px", fontSize: headerFs, fontWeight: 800, textAlign: "center", color: hTextColor }}>🍗</span>}
               <span style={{ width: "14px", fontSize: headerFs, fontWeight: 800, textAlign: "center", color: hTextColor }}>PP</span>
               {!show3cols && <span style={{ width: "13px", fontSize: headerFs, fontWeight: 800, textAlign: "center", color: hTextColor }}>K</span>}
-              <span style={{ width: "15px", fontSize: headerFs, fontWeight: 800, textAlign: "right", color: t.accentColor }}>T</span>
+              <span style={{ width: tColWidth, fontSize: headerFs, fontWeight: 800, textAlign: "center", color: t.accentColor }}>T</span>
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               {col.map((row, idx) => {
@@ -486,7 +490,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
                     {!show3cols && <span style={{ width: "13px", textAlign: "center", fontSize: fs, fontFamily: "monospace", color: row.chickenDinners > 0 ? "#facc15" : "rgba(255,255,255,0.15)" }}>{row.chickenDinners}</span>}
                     <span style={{ width: "14px", textAlign: "center", color: t.cellText, fontSize: fs, fontWeight: 600, fontFamily: "monospace" }}>{row.placementPoints}</span>
                     {!show3cols && <span style={{ width: "13px", textAlign: "center", color: t.cellText, fontSize: fs, fontFamily: "monospace" }}>{row.totalKills}</span>}
-                    <span style={{ width: "15px", textAlign: "right", color: t.accentColor, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace" }}>{row.totalPoints}</span>
+                    <span style={{ width: tColWidth, textAlign: "center", color: t.accentColor, fontSize: scoreFs, fontWeight: 900, fontFamily: "monospace" }}>{row.totalPoints}</span>
                   </div>
                 );
               })}
