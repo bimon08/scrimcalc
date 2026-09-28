@@ -19,6 +19,7 @@ model User {
   role            String    @default("USER")       // "ADMIN" or "USER"
   subscriptionEnd DateTime? @map("subscription_end") // null = no active subscription
   pendingPlanDays Int?       @map("pending_plan_days") // admin-assigned plan waiting for user to activate
+  isTrial         Boolean   @default(true) @map("is_trial") // true = free trial, false = paid plan
   rules           String[]  @default([])
   sharedCodes     String[]  @default([]) @map("shared_codes")
   createdAt       DateTime  @default(now()) @map("created_at")

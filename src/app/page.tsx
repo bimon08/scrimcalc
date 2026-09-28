@@ -80,8 +80,8 @@ export default function TeamsPage() {
 function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>["data"] }) {
   const {
     tournaments, setTournaments, tournament, setTournament,
-    pastTeams, setPastTeams, pageLoaded, syncStatus,
-    save: rawSave, handleSync,
+    pastTeams, setPastTeams, pageLoaded,
+    save: rawSave,
   } = useCloudSync();
   const sub = useSubscription();
   const { guard } = sub;
@@ -343,12 +343,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
 
   const handleDeleteTournament = async (id: string) => {
     if (!sub.isActive && !sub.isAdmin) { sub.setShowNudge(true); return; }
-    setTournaments((prev) => {
-      const next = prev.filter(t => t.id !== id);
-      // Persist deletion to local cache immediately
-      try { localStorage.setItem('bgmi-tournaments-cache', JSON.stringify(next)); } catch { /* ignore */ }
-      return next;
-    });
+    setTournaments((prev) => prev.filter(t => t.id !== id));
     toast.success("Deleted");
     // Delete from server
     try {
@@ -415,11 +410,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
         return;
       }
       const cloned: Tournament = { ...t, id: t.id ?? crypto.randomUUID(), sharedFrom: code, updatedAt: new Date().toISOString() };
-      setTournaments((prev) => {
-        const next = [cloned, ...prev];
-        try { localStorage.setItem('bgmi-tournaments-cache', JSON.stringify(next)); } catch { /* ignore */ }
-        return next;
-      });
+      setTournaments((prev) => [cloned, ...prev]);
       setImportCode(""); setShowImportCode(false);
       toast.success(`"${t.name}" imported! Changes will sync back to the owner.`);
     } catch { toast.error("Import failed"); }
@@ -503,28 +494,36 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
   return (
     <div className="min-h-screen pb-36" style={{ background: "#0c0914" }} onPaste={handlePaste}>
 
-      {/* SUBSCRIPTION BANNER */}
-      {!sub.isAdmin && sub.daysLeft !== null && sub.daysLeft > 0 && sub.daysLeft <= 2 && (
-        <div className="mx-auto max-w-md px-4 pt-4">
-          <div
-            className="flex items-center justify-between rounded-xl px-4 py-2.5 text-xs font-semibold"
-            style={{
-              background: "rgba(239,68,68,0.12)",
-              border: "1px solid rgba(239,68,68,0.3)",
-              color: "#fca5a5",
-            }}
-          >
-            <span>⚠️ Plan expires in <strong>{sub.daysLeft} day{sub.daysLeft !== 1 ? "s" : ""}</strong></span>
-            <button
-              onClick={() => sub.setShowNudge(true)}
-              className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95"
-              style={{ background: "rgba(239,68,68,0.25)", color: "#fca5a5" }}
+      {/* SUBSCRIPTION / TRIAL BANNER */}
+      {!sub.isAdmin && sub.daysLeft !== null && sub.daysLeft > 0 && (sub.isTrial || sub.daysLeft <= 2) && (() => {
+        const urgent = sub.daysLeft <= 2;
+        const warning = sub.daysLeft <= 5;
+        const bg = urgent ? "rgba(239,68,68,0.12)" : warning ? "rgba(251,146,60,0.10)" : "rgba(124,58,237,0.10)";
+        const border = urgent ? "rgba(239,68,68,0.3)" : warning ? "rgba(251,146,60,0.25)" : "rgba(124,58,237,0.2)";
+        const color = urgent ? "#fca5a5" : warning ? "#fdba74" : "#c4b5fd";
+        const btnBg = urgent ? "rgba(239,68,68,0.25)" : warning ? "rgba(251,146,60,0.2)" : "rgba(124,58,237,0.2)";
+        const icon = urgent ? "⚠️" : "⏳";
+        const label = sub.isTrial
+          ? `Free trial: ${sub.daysLeft} day${sub.daysLeft !== 1 ? "s" : ""} remaining`
+          : `Plan expires in ${sub.daysLeft} day${sub.daysLeft !== 1 ? "s" : ""}`;
+        return (
+          <div className="mx-auto max-w-md px-4 pt-4">
+            <div
+              className="flex items-center justify-between rounded-xl px-4 py-2.5 text-xs font-semibold"
+              style={{ background: bg, border: `1px solid ${border}`, color }}
             >
-              Renew
-            </button>
+              <span>{icon} <strong>{label}</strong></span>
+              <button
+                onClick={() => sub.setShowNudge(true)}
+                className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95"
+                style={{ background: btnBg, color }}
+              >
+                {sub.isTrial ? "Upgrade" : "Renew"}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <MainView
         appName={APP_NAME}
@@ -532,9 +531,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
         tournament={tournament}
         setTournament={setTournament}
         pageLoaded={pageLoaded}
-        syncStatus={syncStatus}
         isCollab={isCollab}
-        onSync={handleSync}
         onOpenAction={openAction}
         onShare={handleShare}
         onDelete={handleDeleteTournament}
@@ -826,7 +823,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
 
       {/* BOOKINGS MODAL */}
       {showBookings && tournament && (
-        <BookingsModal tournament={tournament} save={save} onClose={() => setShowBookings(false)} onSyncNow={handleSync} />
+        <BookingsModal tournament={tournament} save={save} onClose={() => setShowBookings(false)} />
       )}
 
       {/* RULES MODAL */}

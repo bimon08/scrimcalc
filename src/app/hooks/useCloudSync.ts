@@ -22,8 +22,6 @@ function writeCache(tournaments: Tournament[]): void {
   try { localStorage.setItem(CACHE_KEY, JSON.stringify(tournaments)); } catch { /* quota exceeded, ignore */ }
 }
 
-export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'synced' | 'unauthed' | 'unsaved';
-
 interface SyncResult {
   tournaments: Tournament[];
   setTournaments: React.Dispatch<React.SetStateAction<Tournament[]>>;
@@ -32,9 +30,7 @@ interface SyncResult {
   pastTeams: PastTeam[];
   setPastTeams: React.Dispatch<React.SetStateAction<PastTeam[]>>;
   pageLoaded: boolean;
-  syncStatus: SyncStatus;
   save: (t: Tournament) => void;
-  handleSync: () => void;
 }
 
 export function useCloudSync(): SyncResult {
@@ -42,7 +38,7 @@ export function useCloudSync(): SyncResult {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [pastTeams, setPastTeams] = useState<PastTeam[]>([]);
   const [pageLoaded, setPageLoaded] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
+  const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pushInProgress = useRef(false);
 
   // ── Ref that always mirrors the tournaments state ──
@@ -64,12 +60,12 @@ export function useCloudSync(): SyncResult {
   );
 
   // ── Push to API ──
-  // Only called by the manual Sync button. No auto-push.
+  // Sends the current in-memory tournaments to the server.
+  // Called on a debounce after every save().
   const pushToServer = useCallback(async () => {
-    if (!navigator.onLine) { setSyncStatus('offline'); toast.error("You're offline"); return; }
+    if (!navigator.onLine) return;
     if (pushInProgress.current) return;
     pushInProgress.current = true;
-    setSyncStatus('syncing');
     try {
       // Read latest in-memory state from the ref (always up-to-date)
       const latest = tournamentsRef.current;
@@ -86,29 +82,28 @@ export function useCloudSync(): SyncResult {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ tournaments: owned, sharedCodes }),
         });
-        if (res.status === 401) {
-          setSyncStatus('unauthed');
-          toast.error("Not logged in — changes not saved");
-          return;
-        }
-        if (!res.ok) throw new Error("Push failed");
+        if (!res.ok && res.status !== 401) throw new Error("Push failed");
       }
 
       // After successful push, update cache
       writeCache(latest);
-      setSyncStatus('synced');
-      toast.success("Synced ☁️");
     } catch {
-      setSyncStatus(navigator.onLine ? 'idle' : 'offline');
-      toast.error("Sync failed — try again");
+      // Retry in 5s on failure
+      if (pushTimer.current) clearTimeout(pushTimer.current);
+      pushTimer.current = setTimeout(() => pushToServer(), 5000);
     } finally {
       pushInProgress.current = false;
     }
   }, []);
 
+  // Debounced push — called after every save()
+  const scheduleSyncDebounce = useCallback(() => {
+    if (pushTimer.current) clearTimeout(pushTimer.current);
+    pushTimer.current = setTimeout(() => pushToServer(), 500);
+  }, [pushToServer]);
+
   // ── Save ──
-  // Updates in-memory state + writes to local cache.
-  // Does NOT auto-push to server — user must tap Sync for cloud save.
+  // Updates in-memory state + local cache immediately, then pushes to cloud via debounce.
   const save = useCallback((t: Tournament) => {
     const updated = { ...t, updatedAt: new Date().toISOString() };
     setTournament(updated);
@@ -121,49 +116,34 @@ export function useCloudSync(): SyncResult {
       writeCache(next);
       return next;
     });
-    setSyncStatus('unsaved');
-  }, [setTournaments]);
+    scheduleSyncDebounce();
+  }, [scheduleSyncDebounce, setTournaments]);
 
-  // ── Sync button handler — pushes local changes to cloud, then pulls fresh data ──
-  const handleSync = useCallback(() => {
-    const doFullSync = async () => {
-      if (!navigator.onLine) { setSyncStatus('offline'); toast.error("You're offline"); return; }
-      if (pushInProgress.current) return;
-      pushInProgress.current = true;
-      setSyncStatus('syncing');
-      try {
-        // 1. Push local changes to server
-        const latest = tournamentsRef.current;
+  // ── Initial load — cloud-first, cache fallback ──
+  useEffect(() => {
+    // Show cached data immediately for fast initial render
+    const cached = readCache();
+    if (cached.length > 0) {
+      setTournaments(cached);
+      setPastTeams(syncPastTeamsFromTournaments(cached));
+    }
 
-        const owned = latest.filter(t => !t.sharedFrom);
-        const sharedCodes = latest
-          .filter(t => t.sharedFrom)
-          .map(t => t.sharedFrom!)
-          .filter((v, i, a) => a.indexOf(v) === i);
-
-        if (owned.length > 0 || sharedCodes.length > 0) {
-          const pushRes = await authFetch("/api/tournaments", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tournaments: owned, sharedCodes }),
-          });
-          if (pushRes.status === 401) { setSyncStatus('unauthed'); toast.error("Not logged in"); return; }
-          if (!pushRes.ok) throw new Error("Push failed");
+    // Fetch from server (source of truth)
+    authFetch("/api/tournaments")
+      .then(r => r.ok ? r.json() : null)
+      .then(async (json) => {
+        if (!json?.tournaments) {
+          // API failed — keep cached data
+          setPageLoaded(true);
+          return;
         }
 
-        // 2. Pull fresh data from server
-        const pullRes = await authFetch("/api/tournaments");
-        if (pullRes.status === 401) { setSyncStatus('unauthed'); toast.error("Not logged in"); return; }
-        if (!pullRes.ok) throw new Error("Pull failed");
+        const remote: Tournament[] = json.tournaments;
+        const serverSharedCodes: string[] = json.sharedCodes ?? [];
 
-        const { tournaments: remote, sharedCodes: serverSharedCodes } = await pullRes.json() as {
-          tournaments: Tournament[];
-          sharedCodes: string[];
-        };
-
-        // 3. Pull shared tournaments
+        // Pull shared tournaments
         const sharedTournaments: Tournament[] = [];
-        for (const code of (serverSharedCodes ?? [])) {
+        for (const code of serverSharedCodes) {
           try {
             const sRes = await fetch(`/api/share/${code}`);
             if (!sRes.ok) continue;
@@ -174,41 +154,45 @@ export function useCloudSync(): SyncResult {
           } catch { /* skip */ }
         }
 
-        // 4. Merge and update local state + cache
         const merged = [...remote, ...sharedTournaments];
         setTournaments(merged);
-        setTournament(prev => prev ? (merged.find(t => t.id === prev.id) ?? prev) : prev);
         setPastTeams(syncPastTeamsFromTournaments(merged));
         writeCache(merged);
-        setSyncStatus('synced');
-        toast.success("Synced ☁️");
-      } catch {
-        setSyncStatus(navigator.onLine ? 'idle' : 'offline');
-        toast.error("Sync failed");
-      } finally {
-        pushInProgress.current = false;
+        setPageLoaded(true);
+      })
+      .catch(() => {
+        // Offline or error — use cache
+        setPageLoaded(true);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Push pending data on page close (safety net) ──
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      if (pushTimer.current) {
+        clearTimeout(pushTimer.current);
+        pushTimer.current = null;
+      }
+      // Always try to push unsaved changes via sendBeacon
+      const latest = tournamentsRef.current;
+      const owned = latest.filter(t => !t.sharedFrom);
+      if (owned.length > 0) {
+        navigator.sendBeacon(
+          "/api/tournaments",
+          new Blob([JSON.stringify({ tournaments: owned })], { type: "application/json" }),
+        );
       }
     };
-    doFullSync();
-  }, [setTournaments]);
-
-  // ── Initial load — local cache only, NO cloud fetch ──
-  // All cloud operations happen exclusively via the Sync button.
-  useEffect(() => {
-    const cached = readCache();
-    if (cached.length > 0) {
-      setTournaments(cached);
-      setPastTeams(syncPastTeamsFromTournaments(cached));
-    }
-    setPageLoaded(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
 
   return {
     tournaments, setTournaments,
     tournament, setTournament,
     pastTeams, setPastTeams,
-    pageLoaded, syncStatus,
-    save, handleSync,
+    pageLoaded,
+    save,
   };
 }

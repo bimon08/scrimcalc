@@ -11,6 +11,8 @@ export interface SubscriptionInfo {
   isLoggedIn: boolean;
   /** Days remaining (-ve if expired) */
   daysLeft: number | null;
+  /** Whether the user is on a free trial */
+  isTrial: boolean;
   /** Pending plan days (admin-assigned, waiting for user to activate) */
   pendingPlanDays: number | null;
   /** Show the subscription nudge modal */
@@ -35,6 +37,7 @@ export function useSubscription(): SubscriptionInfo {
   const role = session?.user?.role ?? "USER";
   const subEnd = session?.user?.subscriptionEnd;
   const pendingPlanDays = session?.user?.pendingPlanDays ?? null;
+  const isTrial = session?.user?.isTrial ?? false;
   const isAdmin = role === "ADMIN";
 
   let isActive = true;
@@ -69,7 +72,7 @@ export function useSubscription(): SubscriptionInfo {
   }, [isAdmin, isActive]);
 
   return {
-    isActive, isAdmin, isLoggedIn, daysLeft,
+    isActive, isAdmin, isLoggedIn, daysLeft, isTrial,
     pendingPlanDays,
     showNudge, setShowNudge,
     showActivation, setShowActivation,

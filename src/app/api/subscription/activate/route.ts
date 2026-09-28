@@ -31,6 +31,7 @@ export async function POST() {
     data: {
       subscriptionEnd: newEnd,
       pendingPlanDays: null, // clear the pending plan
+      isTrial: false,       // paid plan activated, no longer trial
     },
   });
 

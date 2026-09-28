@@ -23,7 +23,6 @@ interface Props {
   tournament: Tournament;
   save: (t: Tournament) => void;
   onClose: () => void;
-  onSyncNow: () => void;
 }
 
 const norm = (p?: string | null) => {
@@ -31,7 +30,7 @@ const norm = (p?: string | null) => {
   return d.length > 10 ? d.slice(-10) : d;
 };
 
-export default function BookingsModal({ tournament, save, onClose, onSyncNow }: Props) {
+export default function BookingsModal({ tournament, save, onClose }: Props) {
   const [data, setData] = useState<BookingsData | null>(null);
   const [debiting, setDebiting] = useState(false);
   // isActive owned locally — initialized from DB on mount, not from parent prop

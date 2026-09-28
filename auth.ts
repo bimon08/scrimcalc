@@ -14,6 +14,7 @@ declare module "next-auth" {
       role: string;
       subscriptionEnd: string | null;
       pendingPlanDays: number | null;
+      isTrial: boolean;
     };
   }
 }
@@ -74,6 +75,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.role = dbUser.role;
           token.subscriptionEnd = dbUser.subscriptionEnd?.toISOString() ?? null;
           token.pendingPlanDays = dbUser.pendingPlanDays ?? null;
+          token.isTrial = dbUser.isTrial;
         }
       }
       return token;
@@ -84,6 +86,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.role = (token.role as string) ?? "USER";
         session.user.subscriptionEnd = (token.subscriptionEnd as string) ?? null;
         session.user.pendingPlanDays = (token.pendingPlanDays as number) ?? null;
+        session.user.isTrial = (token.isTrial as boolean) ?? false;
       }
       return session;
     },
