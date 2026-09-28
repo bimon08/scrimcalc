@@ -98,15 +98,15 @@ export default function MainView({
               disabled={syncStatus === 'syncing'}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold press-scale disabled:opacity-60 transition-all"
               style={{
-                background: syncStatus === 'unauthed' ? "rgba(239,68,68,0.15)" : syncStatus === 'offline' ? "rgba(251,146,60,0.15)" : "rgba(124,58,237,0.15)",
-                color: syncStatus === 'unauthed' ? "rgb(248,113,113)" : syncStatus === 'offline' ? "rgb(251,146,60)" : syncStatus === 'synced' ? "rgb(74,222,128)" : "rgba(167,139,250,0.8)",
-                border: `1px solid ${syncStatus === 'unauthed' ? 'rgba(239,68,68,0.3)' : syncStatus === 'offline' ? 'rgba(251,146,60,0.3)' : syncStatus === 'synced' ? 'rgba(74,222,128,0.3)' : 'rgba(124,58,237,0.2)'}`,
+                background: syncStatus === 'unauthed' ? "rgba(239,68,68,0.15)" : syncStatus === 'offline' ? "rgba(251,146,60,0.15)" : syncStatus === 'unsaved' ? "rgba(251,191,36,0.15)" : "rgba(124,58,237,0.15)",
+                color: syncStatus === 'unauthed' ? "rgb(248,113,113)" : syncStatus === 'offline' ? "rgb(251,146,60)" : syncStatus === 'unsaved' ? "rgb(251,191,36)" : syncStatus === 'synced' ? "rgb(74,222,128)" : "rgba(167,139,250,0.8)",
+                border: `1px solid ${syncStatus === 'unauthed' ? 'rgba(239,68,68,0.3)' : syncStatus === 'offline' ? 'rgba(251,146,60,0.3)' : syncStatus === 'unsaved' ? 'rgba(251,191,36,0.4)' : syncStatus === 'synced' ? 'rgba(74,222,128,0.3)' : 'rgba(124,58,237,0.2)'}`,
               }}
             >
-              {syncStatus === 'syncing' || syncStatus === 'pending'
-                ? <div className={`h-3 w-3 rounded-full border-2 border-current border-t-transparent ${syncStatus === 'syncing' ? 'animate-spin' : 'animate-spin opacity-50'}`} />
+              {syncStatus === 'syncing'
+                ? <div className="h-3 w-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
                 : <RefreshCw className="h-3 w-3" />}
-              {syncStatus === 'syncing' ? "Syncing…" : syncStatus === 'pending' ? "Saving…" : syncStatus === 'offline' ? "Offline" : syncStatus === 'unauthed' ? "Session expired" : syncStatus === 'synced' ? "Synced" : "Sync"}
+              {syncStatus === 'syncing' ? "Syncing…" : syncStatus === 'unsaved' ? "Save ↑" : syncStatus === 'offline' ? "Offline" : syncStatus === 'unauthed' ? "Session expired" : syncStatus === 'synced' ? "Synced" : "Sync"}
             </button>
           </div>
 

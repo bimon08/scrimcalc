@@ -81,7 +81,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
   const {
     tournaments, setTournaments, tournament, setTournament,
     pastTeams, setPastTeams, pageLoaded, syncStatus,
-    save: rawSave, handleSync, scheduleSyncDebounce,
+    save: rawSave, handleSync,
   } = useCloudSync();
   const sub = useSubscription();
   const { guard } = sub;
@@ -343,14 +343,18 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
 
   const handleDeleteTournament = async (id: string) => {
     if (!sub.isActive && !sub.isAdmin) { sub.setShowNudge(true); return; }
-    setTournaments((prev) => prev.filter(t => t.id !== id));
+    setTournaments((prev) => {
+      const next = prev.filter(t => t.id !== id);
+      // Persist deletion to local cache immediately
+      try { localStorage.setItem('bgmi-tournaments-cache', JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
     toast.success("Deleted");
     // Delete from server
     try {
       const res = await authFetch(`/api/tournaments/${id}`, { method: "DELETE" });
       if (!res.ok) toast.error("Server delete failed");
     } catch { /* offline */ }
-    scheduleSyncDebounce();
   };
 
   const handleShare = async (t: Tournament) => {
@@ -411,8 +415,11 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
         return;
       }
       const cloned: Tournament = { ...t, id: t.id ?? crypto.randomUUID(), sharedFrom: code, updatedAt: new Date().toISOString() };
-      setTournaments((prev) => [cloned, ...prev]);
-      scheduleSyncDebounce();
+      setTournaments((prev) => {
+        const next = [cloned, ...prev];
+        try { localStorage.setItem('bgmi-tournaments-cache', JSON.stringify(next)); } catch { /* ignore */ }
+        return next;
+      });
       setImportCode(""); setShowImportCode(false);
       toast.success(`"${t.name}" imported! Changes will sync back to the owner.`);
     } catch { toast.error("Import failed"); }
