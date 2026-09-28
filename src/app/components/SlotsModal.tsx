@@ -330,23 +330,23 @@ export default function SlotsModal({ tournament, groupFilter, setGroupFilter, on
     const mt = isLandscape ? "mt-0.5" : "mt-1";
     if (t.layout === "banner") {
       return (
-        <div className={`${mt} flex items-center justify-between`}>
-          <span style={{ fontSize: fs, fontWeight: 600, color: t.badgeText }}>Total Players: {totalPlayers}</span>
+        <div className={`${mt} flex items-center ${showRoster ? "justify-between" : "justify-end"}`}>
+          {showRoster && <span style={{ fontSize: fs, fontWeight: 600, color: t.badgeText }}>Total Players: {totalPlayers}</span>}
           <span style={{ fontSize: fs, fontWeight: 700, letterSpacing: "0.1em", color: t.footerText, opacity: 0.5 }}>By {APP_NAME}</span>
         </div>
       );
     }
     if (t.layout === "minimal") {
       return (
-        <div className={`${mt} pt-0.5 flex items-center justify-between`} style={{ borderTop: `1px solid ${t.rowBorder}20` }}>
-          <span style={{ fontSize: fs, fontWeight: 600, color: t.badgeText }}>Total Players: {totalPlayers}</span>
+        <div className={`${mt} pt-0.5 flex items-center ${showRoster ? "justify-between" : "justify-center"}`} style={{ borderTop: `1px solid ${t.rowBorder}20` }}>
+          {showRoster && <span style={{ fontSize: fs, fontWeight: 600, color: t.badgeText }}>Total Players: {totalPlayers}</span>}
           <span style={{ fontSize: fs, fontWeight: 500, color: t.footerText, opacity: 0.4 }}>{APP_NAME}</span>
         </div>
       );
     }
     return (
-      <div className={`${mt} flex items-center justify-between px-0.5`}>
-        <span style={{ fontSize: fs, fontWeight: 600, color: t.badgeText }}>Total Players: {totalPlayers}</span>
+      <div className={`${mt} flex items-center ${showRoster ? "justify-between px-0.5" : "justify-center"}`}>
+        {showRoster && <span style={{ fontSize: fs, fontWeight: 600, color: t.badgeText }}>Total Players: {totalPlayers}</span>}
         <div className="flex items-center gap-1">
           <div className="h-px w-4" style={{ background: `linear-gradient(to right,transparent,${t.footerAccent})` }} />
           <span style={{ fontSize: appFs, fontWeight: 500, color: t.footerText }}>{APP_NAME}</span>

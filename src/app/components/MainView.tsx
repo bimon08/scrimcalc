@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tournament } from "@/lib/types";
+import type { SubscriptionInfo } from "../hooks/useSubscription";
 
 /* ── Inline sub-components ── */
 function QuickBtn({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
@@ -42,12 +43,13 @@ interface Props {
   onCreateOpen: () => void;
   onImportOpen: () => void;
   save: (t: Tournament) => void;
+  sub?: SubscriptionInfo;
 }
 
 export default function MainView({
   appName, tournaments, tournament, setTournament, pageLoaded,
   isCollab, onOpenAction, onShare, onDelete, onCollabDelete,
-  onCreateOpen, onImportOpen, save,
+  onCreateOpen, onImportOpen, save, sub,
 }: Props) {
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [showMore, setShowMore] = useState(false);
@@ -93,14 +95,48 @@ export default function MainView({
             <span className="text-sm font-bold text-white flex-1">Tournaments</span>
           </div>
 
-          {/* Mine / Shared tabs */}
-          <div className="flex gap-1 mb-3 p-0.5 rounded-lg" style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.14)", display: "inline-flex" }}>
-            {([['mine', 'Mine', mineCount], ['shared', 'Shared', sharedCount]] as const).map(([tab, label, count]) => (
-              <button key={tab} onClick={() => setTournamentTab(tab)} className="flex items-center gap-1 px-3 py-1 rounded-md text-[11px] font-bold transition-all" style={{ background: tournamentTab === tab ? "rgba(124,58,237,0.35)" : "transparent", color: tournamentTab === tab ? "#c4b5fd" : "rgba(167,139,250,0.4)" }}>
-                {label}
-                {count > 0 && <span className="px-1 rounded-full text-[9px] font-black" style={{ background: tournamentTab === tab ? "rgba(124,58,237,0.5)" : "rgba(124,58,237,0.2)", color: "#c4b5fd" }}>{count}</span>}
-              </button>
-            ))}
+          {/* Mine / Shared tabs + Compact Plan Badge */}
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex gap-1 p-0.5 rounded-lg shrink-0" style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.14)" }}>
+              {([['mine', 'Mine', mineCount], ['shared', 'Shared', sharedCount]] as const).map(([tab, label, count]) => (
+                <button key={tab} onClick={() => setTournamentTab(tab)} className="flex items-center gap-1 px-3 py-1 rounded-md text-[11px] font-bold transition-all" style={{ background: tournamentTab === tab ? "rgba(124,58,237,0.35)" : "transparent", color: tournamentTab === tab ? "#c4b5fd" : "rgba(167,139,250,0.4)" }}>
+                  {label}
+                  {count > 0 && <span className="px-1 rounded-full text-[9px] font-black" style={{ background: tournamentTab === tab ? "rgba(124,58,237,0.5)" : "rgba(124,58,237,0.2)", color: "#c4b5fd" }}>{count}</span>}
+                </button>
+              ))}
+            </div>
+
+            {/* Compact Plan Badge */}
+            {sub && !sub.isAdmin && sub.daysLeft !== null && sub.daysLeft > 0 && (sub.isTrial || sub.daysLeft <= 5) && (() => {
+              const urgent = sub.daysLeft <= 2;
+              const warning = sub.daysLeft <= 5;
+              const bg = urgent ? "rgba(239,68,68,0.14)" : warning ? "rgba(251,146,60,0.12)" : "rgba(124,58,237,0.12)";
+              const border = urgent ? "rgba(239,68,68,0.35)" : warning ? "rgba(251,146,60,0.3)" : "rgba(124,58,237,0.25)";
+              const color = urgent ? "#fca5a5" : warning ? "#fdba74" : "#c4b5fd";
+              const btnBg = urgent ? "rgba(239,68,68,0.3)" : warning ? "rgba(251,146,60,0.25)" : "rgba(124,58,237,0.25)";
+              const icon = urgent ? "⚠️" : "⏳";
+              const label = sub.isTrial
+                ? `${sub.daysLeft}d trial`
+                : `${sub.daysLeft}d left`;
+              return (
+                <div
+                  className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold shrink-0"
+                  style={{ background: bg, border: `1px solid ${border}`, color }}
+                >
+                  <span className="flex items-center gap-1 whitespace-nowrap">
+                    <span>{icon}</span>
+                    <span>{label}</span>
+                  </span>
+                  <button
+                    onClick={() => sub.setShowNudge(true)}
+                    className="px-1.5 py-0.5 rounded text-[9px] font-bold transition-all active:scale-95 whitespace-nowrap"
+                    style={{ background: btnBg, color }}
+                  >
+                    {sub.isTrial ? "Upgrade" : "Renew"}
+                  </button>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Skeleton — shown while cloud data is loading */}

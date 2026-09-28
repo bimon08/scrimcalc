@@ -499,37 +499,6 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
   return (
     <div className="min-h-screen pb-36" style={{ background: "#0c0914" }} onPaste={handlePaste}>
 
-      {/* SUBSCRIPTION / TRIAL BANNER */}
-      {!sub.isAdmin && sub.daysLeft !== null && sub.daysLeft > 0 && (sub.isTrial || sub.daysLeft <= 2) && (() => {
-        const urgent = sub.daysLeft <= 2;
-        const warning = sub.daysLeft <= 5;
-        const bg = urgent ? "rgba(239,68,68,0.12)" : warning ? "rgba(251,146,60,0.10)" : "rgba(124,58,237,0.10)";
-        const border = urgent ? "rgba(239,68,68,0.3)" : warning ? "rgba(251,146,60,0.25)" : "rgba(124,58,237,0.2)";
-        const color = urgent ? "#fca5a5" : warning ? "#fdba74" : "#c4b5fd";
-        const btnBg = urgent ? "rgba(239,68,68,0.25)" : warning ? "rgba(251,146,60,0.2)" : "rgba(124,58,237,0.2)";
-        const icon = urgent ? "⚠️" : "⏳";
-        const label = sub.isTrial
-          ? `Free trial: ${sub.daysLeft} day${sub.daysLeft !== 1 ? "s" : ""} remaining`
-          : `Plan expires in ${sub.daysLeft} day${sub.daysLeft !== 1 ? "s" : ""}`;
-        return (
-          <div className="mx-auto max-w-md px-4 pt-4">
-            <div
-              className="flex items-center justify-between rounded-xl px-4 py-2.5 text-xs font-semibold"
-              style={{ background: bg, border: `1px solid ${border}`, color }}
-            >
-              <span>{icon} <strong>{label}</strong></span>
-              <button
-                onClick={() => sub.setShowNudge(true)}
-                className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all active:scale-95"
-                style={{ background: btnBg, color }}
-              >
-                {sub.isTrial ? "Upgrade" : "Renew"}
-              </button>
-            </div>
-          </div>
-        );
-      })()}
-
       <MainView
         appName={APP_NAME}
         tournaments={tournaments}
@@ -544,6 +513,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
         onCreateOpen={() => setShowCreate(true)}
         onImportOpen={() => setShowImportCode(true)}
         save={save}
+        sub={sub}
       />
 
       {/* CREATE SCREEN */}
