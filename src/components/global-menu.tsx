@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Menu, X, BookOpen, ChevronRight, Home, Trophy } from "lucide-react";
+import { Menu, X, BookOpen, ChevronRight, Home, Trophy, Wallet, Target, User, HelpCircle } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 
 export function GlobalMenu() {
@@ -20,8 +20,12 @@ export function GlobalMenu() {
   if (hidden) return null;
 
   const items = [
-    { href: "/", icon: <Home className="h-4 w-4" />, label: "Home", desc: "All tournaments" },
-    { href: "/rules", icon: <BookOpen className="h-4 w-4" />, label: "Rules", desc: "Edit tournament rules" },
+    { href: "/", icon: <Home className="h-4 w-4" />, label: "Tournaments", desc: "All scrims & matches" },
+    { href: "/wallet", icon: <Wallet className="h-4 w-4" />, label: "Player Wallet", desc: "Dues, advance & entry fees" },
+    { href: "/rules", icon: <BookOpen className="h-4 w-4" />, label: "Tournament Rules", desc: "Custom scrim guidelines" },
+    { href: "/stats", icon: <Target className="h-4 w-4" />, label: "Match Parser & Stats", desc: "AI paste scores & groups" },
+    { href: "/profile", icon: <User className="h-4 w-4" />, label: "Profile & Sync", desc: "Account, plan & sync keys" },
+    { href: "/help", icon: <HelpCircle className="h-4 w-4" />, label: "Help & Guide", desc: "Feature walkthrough & FAQs" },
   ];
 
   return (
