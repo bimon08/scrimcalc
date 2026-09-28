@@ -29,10 +29,30 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
 
   const handleActiveIndexChange = (i: number) => { setActiveIdx(i); };
 
-  // Group-aware filtering
-  const filteredStandings = tournament.splitEnabled && groupFilter !== "all"
+  // Group-aware filtering & fallback to registered teams if no matches/pasted data yet
+  const activeTeams = tournament.teams.filter(
+    (t) => !t.out && (!tournament.splitEnabled || groupFilter === "all" || t.group === groupFilter)
+  );
+
+  const rawFilteredStandings = tournament.splitEnabled && groupFilter !== "all"
     ? standings.filter(row => { const team = tournament.teams.find(t => t.id === row.teamId); return team?.group === groupFilter; })
     : standings;
+
+  const filteredStandings: StandingRow[] = rawFilteredStandings.length > 0
+    ? rawFilteredStandings
+    : activeTeams.map((team) => ({
+        teamId: team.id,
+        teamName: team.name,
+        group: team.group || "—",
+        players: team.players ?? [],
+        totalPoints: 0,
+        chickenDinners: 0,
+        placementPoints: 0,
+        totalKills: 0,
+        lastMatchPosition: 0,
+        positions: [],
+        matchCount: 0,
+      }));
 
   const warheadData = [...filteredStandings].sort((a, b) => b.totalKills - a.totalKills);
 
@@ -48,7 +68,18 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
     }
     group.matches.forEach((match) => Object.entries(match.playerKills).forEach(([p, k]) => killMap.set(p, (killMap.get(p) || 0) + k)));
   });
-  const topFraggers = [...killMap.entries()].map(([name, kills]) => ({ name, kills })).sort((a, b) => b.kills - a.kills).slice(0, 20);
+  let topFraggers = [...killMap.entries()].map(([name, kills]) => ({ name, kills })).sort((a, b) => b.kills - a.kills).slice(0, 20);
+  if (topFraggers.length === 0) {
+    const playerList: { name: string; kills: number }[] = [];
+    activeTeams.forEach((t) => {
+      (t.players ?? []).forEach((p) => {
+        if (p && p.trim()) playerList.push({ name: p.trim(), kills: 0 });
+      });
+    });
+    topFraggers = playerList.length > 0
+      ? playerList.slice(0, 20)
+      : activeTeams.map(t => ({ name: t.name, kills: 0 })).slice(0, 20);
+  }
 
   // Image capture
   const capture = useCallback(async (download: boolean) => {
