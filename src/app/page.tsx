@@ -343,7 +343,12 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
 
   const handleDeleteTournament = async (id: string) => {
     if (!sub.isActive && !sub.isAdmin) { sub.setShowNudge(true); return; }
-    setTournaments((prev) => prev.filter(t => t.id !== id));
+    setTournaments((prev) => {
+      const next = prev.filter(t => t.id !== id);
+      // Update local cache so deleted tournament doesn't flash back on refresh
+      try { localStorage.setItem('bgmi-tournaments-cache', JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
     toast.success("Deleted");
     // Delete from server
     try {

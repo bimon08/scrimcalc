@@ -383,7 +383,7 @@ export default function AddTeamsScreen({
                       </div>
                       {!isExpanded && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); onAddPastTeam(pt); toast.success(`${pt.name} added!`); }}
+                          onClick={(e) => { e.stopPropagation(); onAddPastTeam(pt); }}
                           className="p-2 rounded-xl press-scale shrink-0"
                           style={{ background: "rgba(124,58,237,0.2)" }}
                         >
