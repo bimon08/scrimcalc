@@ -141,3 +141,8 @@ export async function PUT(req: Request) {
 
   return NextResponse.json({ ok: true, count: tournaments.length });
 }
+
+// POST /api/tournaments — alias for PUT (needed because navigator.sendBeacon always sends POST)
+export async function POST(req: Request) {
+  return PUT(req);
+}

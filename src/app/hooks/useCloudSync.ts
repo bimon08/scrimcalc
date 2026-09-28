@@ -39,13 +39,31 @@ interface SyncResult {
 }
 
 export function useCloudSync(): SyncResult {
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [tournaments, _setTournaments] = useState<Tournament[]>([]);
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [pastTeams, setPastTeams] = useState<PastTeam[]>([]);
   const [pageLoaded, setPageLoaded] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pushInProgress = useRef(false);
+
+  // ── Ref that always mirrors the tournaments state ──
+  // React 18 automatic batching can prevent functional-update state reads
+  // from working synchronously when another setState has already dirtied
+  // the fiber's lanes. A ref is immune to this and always readable.
+  const tournamentsRef = useRef<Tournament[]>([]);
+
+  // Wrapped setTournaments that keeps the ref in sync
+  const setTournaments: React.Dispatch<React.SetStateAction<Tournament[]>> = useCallback(
+    (action: React.SetStateAction<Tournament[]>) => {
+      _setTournaments(prev => {
+        const next = typeof action === 'function' ? action(prev) : action;
+        tournamentsRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
 
   // ── Push to API ──
   // Sends the current in-memory tournaments to the server.
@@ -56,9 +74,8 @@ export function useCloudSync(): SyncResult {
     pushInProgress.current = true;
     setSyncStatus('syncing');
     try {
-      // Read latest in-memory state via functional update trick
-      let latest: Tournament[] = [];
-      setTournaments(prev => { latest = prev; return prev; });
+      // Read latest in-memory state from the ref (always up-to-date)
+      const latest = tournamentsRef.current;
 
       const owned = latest.filter(t => !t.sharedFrom);
       const sharedCodes = latest
@@ -118,7 +135,7 @@ export function useCloudSync(): SyncResult {
       return next;
     });
     scheduleSyncDebounce();
-  }, [scheduleSyncDebounce]);
+  }, [scheduleSyncDebounce, setTournaments]);
 
   // ── Full pull from server (manual sync button) ──
   const handleSync = useCallback(() => {
@@ -127,9 +144,8 @@ export function useCloudSync(): SyncResult {
       if (!navigator.onLine) { setSyncStatus('offline'); toast.error("You're offline"); return; }
       setSyncStatus('syncing');
       try {
-        // First push any pending changes
-        let latest: Tournament[] = [];
-        setTournaments(prev => { latest = prev; return prev; });
+        // First push any pending changes (read from ref)
+        const latest = tournamentsRef.current;
 
         const owned = latest.filter(t => !t.sharedFrom);
         const sharedCodes = latest
@@ -181,7 +197,7 @@ export function useCloudSync(): SyncResult {
       }
     };
     doFullSync();
-  }, []);
+  }, [setTournaments]);
 
   // ── Initial load — cloud-first, cache fallback ──
   useEffect(() => {
@@ -240,14 +256,13 @@ export function useCloudSync(): SyncResult {
       if (pushTimer.current) {
         clearTimeout(pushTimer.current);
         pushTimer.current = null;
-        // Use sendBeacon for reliable last-chance push
-        let latest: Tournament[] = [];
-        setTournaments(prev => { latest = prev; return prev; });
+        // Use sendBeacon for reliable last-chance push (read from ref)
+        const latest = tournamentsRef.current;
         const owned = latest.filter(t => !t.sharedFrom);
         if (owned.length > 0) {
           navigator.sendBeacon(
             "/api/tournaments",
-            new Blob([JSON.stringify({ tournaments: owned })], { type: "application/json" })
+            new Blob([JSON.stringify({ tournaments: owned })], { type: "application/json" }),
           );
         }
       }
