@@ -18,7 +18,7 @@ import { computeStandings as computeStandingsFromTournament, normalizeAndAssign 
 import { parseTeamPaste } from "@/lib/parseTeam";
 import { generatePrompt } from "@/lib/prompt";
 import { authFetch } from "@/lib/authFetch";
-import { normalizeGeminiData, uniquePlayers, autoAssignAndEnrich } from "@/lib/gemini";
+import { normalizeGeminiData, mergeGeminiData, uniquePlayers, autoAssignAndEnrich } from "@/lib/gemini";
 import SubscriptionNudge from "@/components/subscription-gate";
 import ActivationPopup from "@/components/activation-popup";
 
@@ -148,6 +148,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [showBookings, setShowBookings] = useState(false);
   const [showPasteTip, setShowPasteTip] = useState(false);
+  const [pendingPasteData, setPendingPasteData] = useState<GeminiOutput | null>(null);
 
   const [collabDeleteId, setCollabDeleteId] = useState<string | null>(null);
 
@@ -457,17 +458,55 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
       const raw = JSON.parse(jsonStr) as GeminiOutput;
       if (!raw.groups || !Array.isArray(raw.groups)) throw new Error("Invalid JSON");
       const data = normalizeGeminiData(raw, tournament);
-      const { assigned, autoAssignments, enrichedTeams } = autoAssignAndEnrich(tournament, data, assignments);
-      setGroups(assigned);
-      setAssignments(autoAssignments);
-      setMatchesDetected(data.matches_detected || 0);
-      const updated = { ...tournament, teams: enrichedTeams, geminiData: data, assignments: autoAssignments };
-      save(updated);
-      recomputeStandings(updated);
-      const autoCount = Object.keys(autoAssignments).length;
-      const enriched = enrichedTeams.filter((t, i) => t !== tournament.teams[i]).length;
-      toast.success(`${data.groups.length} groups · ${data.matches_detected} matches · ${autoCount} assigned${enriched ? ` · ${enriched} rosters updated` : ""}`);
+
+      // If data already exists, show confirmation modal instead of replacing immediately
+      if (tournament.geminiData && tournament.geminiData.groups.length > 0) {
+        setPendingPasteData(data);
+        return;
+      }
+
+      // No existing data — apply directly
+      applyGeminiData(data);
     } catch (err: unknown) { toast.error((err as Error).message || "Invalid JSON"); }
+  };
+
+  /** Apply gemini data directly (replace mode or first paste) */
+  const applyGeminiData = (data: GeminiOutput) => {
+    if (!tournament) return;
+    const { assigned, autoAssignments, enrichedTeams } = autoAssignAndEnrich(tournament, data, assignments);
+    setGroups(assigned);
+    setAssignments(autoAssignments);
+    setMatchesDetected(data.matches_detected || 0);
+    const updated = { ...tournament, teams: enrichedTeams, geminiData: data, assignments: autoAssignments };
+    save(updated);
+    recomputeStandings(updated);
+    const autoCount = Object.keys(autoAssignments).length;
+    const enriched = enrichedTeams.filter((t, i) => t !== tournament.teams[i]).length;
+    toast.success(`${data.groups.length} groups · ${data.matches_detected} matches · ${autoCount} assigned${enriched ? ` · ${enriched} rosters updated` : ""}`);
+  };
+
+  /** Accumulate: merge new matches into existing data */
+  const handlePasteAccumulate = () => {
+    if (!tournament || !pendingPasteData || !tournament.geminiData) return;
+    const merged = mergeGeminiData(tournament.geminiData, pendingPasteData, tournament);
+    const { assigned, autoAssignments, enrichedTeams } = autoAssignAndEnrich(tournament, merged, assignments);
+    setGroups(assigned);
+    setAssignments(autoAssignments);
+    setMatchesDetected(merged.matches_detected || 0);
+    const updated = { ...tournament, teams: enrichedTeams, geminiData: merged, assignments: autoAssignments };
+    save(updated);
+    recomputeStandings(updated);
+    const existingCount = tournament.geminiData.matches_detected;
+    const newCount = merged.matches_detected - existingCount;
+    toast.success(`Added ${newCount} new matches (M${existingCount + 1}–M${merged.matches_detected}) · ${merged.matches_detected} total`);
+    setPendingPasteData(null);
+  };
+
+  /** Replace: wipe existing data and use new data */
+  const handlePasteReplace = () => {
+    if (!pendingPasteData) return;
+    applyGeminiData(pendingPasteData);
+    setPendingPasteData(null);
   };
   const handlePaste = (e: React.ClipboardEvent) => {
     const text = e.clipboardData.getData("text");
@@ -709,6 +748,65 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
             recomputeStandings(updated);
             closeOverlay(() => setShowMatchEdit(false));
           }}
+          onAddMatch={() => {
+            if (!tournament?.geminiData) return;
+            const ps = tournament.pointSystem ?? DEFAULT_BGMI_POINTS;
+            const newMatchNum = matchesDetected + 1;
+            const newGroups = tournament.geminiData.groups.map(g => {
+              const blankMatch = {
+                match: newMatchNum,
+                position: g.matches.length > 0 ? Math.max(...g.matches.map(m => m.position)) : 1,
+                playerKills: Object.fromEntries(g.players.map(p => [p, 0])),
+                teamKills: 0,
+                placementPoints: 0,
+                matchPoints: 0,
+              };
+              const matches = [...g.matches, blankMatch];
+              const totals = {
+                totalPoints: matches.reduce((a, m) => a + m.matchPoints, 0),
+                chickenDinners: matches.filter(m => m.position === 1).length,
+                totalPlacementPoints: matches.reduce((a, m) => a + m.placementPoints, 0),
+                totalKills: matches.reduce((a, m) => a + m.teamKills, 0),
+                lastMatchPosition: matches[matches.length - 1]?.position ?? 0,
+              };
+              return { ...g, matches, totals };
+            });
+            const updatedData = { ...tournament.geminiData, groups: newGroups, matches_detected: newMatchNum };
+            const updated = { ...tournament, geminiData: updatedData };
+            save(updated);
+            const { groups: refreshedGroups, assignments: a, matchesDetected: md } = normalizeAndAssign(updated);
+            setGroups(refreshedGroups);
+            setAssignments(a);
+            setMatchesDetected(md);
+            recomputeStandings(updated);
+            toast.success(`Match ${newMatchNum} added`);
+          }}
+          onDeleteMatch={(matchNum) => {
+            if (!tournament?.geminiData) return;
+            const newGroups = tournament.geminiData.groups.map(g => {
+              const matches = g.matches
+                .filter(m => m.match !== matchNum)
+                .map(m => ({ ...m, match: m.match > matchNum ? m.match - 1 : m.match }));
+              const totals = {
+                totalPoints: matches.reduce((a, m) => a + m.matchPoints, 0),
+                chickenDinners: matches.filter(m => m.position === 1).length,
+                totalPlacementPoints: matches.reduce((a, m) => a + m.placementPoints, 0),
+                totalKills: matches.reduce((a, m) => a + m.teamKills, 0),
+                lastMatchPosition: matches[matches.length - 1]?.position ?? 0,
+              };
+              return { ...g, matches, totals };
+            });
+            const newDetected = Math.max(0, matchesDetected - 1);
+            const updatedData = { ...tournament.geminiData, groups: newGroups, matches_detected: newDetected };
+            const updated = { ...tournament, geminiData: updatedData };
+            save(updated);
+            const { groups: refreshedGroups, assignments: a, matchesDetected: md } = normalizeAndAssign(updated);
+            setGroups(refreshedGroups);
+            setAssignments(a);
+            setMatchesDetected(md);
+            recomputeStandings(updated);
+            toast.success(`Match ${matchNum} deleted · renumbered`);
+          }}
         />
       )}
 
@@ -827,6 +925,55 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
             window.location.reload();
           }}
         />
+      )}
+
+      {/* PASTE ACCUMULATE/REPLACE MODAL */}
+      {pendingPasteData && tournament && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}>
+          <div className="w-full max-w-sm rounded-2xl p-5 space-y-4" style={{ background: "linear-gradient(135deg,#1a1030,#0f0a1e)", border: "1px solid rgba(124,58,237,0.3)" }}>
+            <div>
+              <h2 className="text-base font-bold text-white">Match data already exists</h2>
+              <p className="text-xs mt-1.5" style={{ color: "rgba(167,139,250,0.55)" }}>
+                You have {matchesDetected} matches (M1–M{matchesDetected}). What do you want to do with the new data?
+              </p>
+            </div>
+            <div className="space-y-2">
+              <button
+                onClick={handlePasteAccumulate}
+                className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all active:scale-[0.98]"
+                style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)" }}
+              >
+                <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 text-lg" style={{ background: "rgba(124,58,237,0.25)" }}>➕</div>
+                <div>
+                  <p className="text-sm font-bold text-white">Add to existing</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: "rgba(167,139,250,0.5)" }}>
+                    New matches become M{matchesDetected + 1}, M{matchesDetected + 2}…
+                  </p>
+                </div>
+              </button>
+              <button
+                onClick={handlePasteReplace}
+                className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all active:scale-[0.98]"
+                style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}
+              >
+                <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 text-lg" style={{ background: "rgba(239,68,68,0.15)" }}>🔄</div>
+                <div>
+                  <p className="text-sm font-bold text-white">Replace all</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: "rgba(239,68,68,0.5)" }}>
+                    Clear everything and start fresh
+                  </p>
+                </div>
+              </button>
+            </div>
+            <button
+              onClick={() => setPendingPasteData(null)}
+              className="w-full py-2 text-xs font-medium rounded-lg transition-colors"
+              style={{ color: "rgba(167,139,250,0.4)" }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
     </div>

@@ -108,6 +108,7 @@ export default function CalculateScreen({
           </div>
         ) : (
           /* ── Groups list ── */
+          <>
           <div className="space-y-3">
             {/* Match selector pills */}
             {matchesDetected > 1 && (
@@ -199,6 +200,30 @@ export default function CalculateScreen({
               );
             })}
           </div>
+
+          {/* Persistent action bar for adding more matches */}
+          <div className="sticky bottom-0 pt-3 pb-6 mt-4" style={{ background: "linear-gradient(to top, #0c0914 70%, transparent)" }}>
+            <div className="flex gap-2">
+              <button
+                onClick={onCopyPrompt}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all active:scale-95"
+                style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", color: "#c4b5fd" }}
+              >
+                Copy Prompt
+              </button>
+              <button
+                onClick={onPasteJson}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold text-white transition-all active:scale-95"
+                style={{ background: "linear-gradient(135deg,#7c3aed,#9333ea)", boxShadow: "0 4px 20px rgba(124,58,237,0.4)" }}
+              >
+                <ClipboardPaste className="h-3.5 w-3.5" /> Paste JSON
+              </button>
+            </div>
+            <p className="text-[10px] text-center mt-1.5" style={{ color: "rgba(167,139,250,0.3)" }}>
+              Add more matches · data will accumulate
+            </p>
+          </div>
+          </>
         )}
       </div>
     </div>

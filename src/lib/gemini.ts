@@ -1,4 +1,115 @@
-import { Tournament, GeminiOutput, AssignedGroup, DEFAULT_BGMI_POINTS } from "@/lib/types";
+import { Tournament, GeminiOutput, GeminiGroup, AssignedGroup, DEFAULT_BGMI_POINTS } from "@/lib/types";
+
+/**
+ * Merge new Gemini data into existing data — accumulates matches across days.
+ * New match numbers are renumbered to continue from the highest existing match number.
+ * Groups present in both are merged; groups only in new data are added.
+ */
+export function mergeGeminiData(
+  existing: GeminiOutput,
+  incoming: GeminiOutput,
+  tournament: Tournament,
+): GeminiOutput {
+  const ps = tournament.pointSystem ?? DEFAULT_BGMI_POINTS;
+  // Find the highest existing match number across all groups
+  let maxExistingMatch = 0;
+  existing.groups.forEach((g) =>
+    g.matches.forEach((m) => { if (m.match > maxExistingMatch) maxExistingMatch = m.match; })
+  );
+
+  // Build a map of existing groups by group label (lowercase key → original group)
+  const existingMap = new Map<string, GeminiGroup>();
+  existing.groups.forEach((g) => existingMap.set(g.group.toLowerCase().trim(), g));
+
+  // Find the unique match numbers in the incoming data to build a renumber map
+  const incomingMatchNumbers = new Set<number>();
+  incoming.groups.forEach((g) => g.matches.forEach((m) => incomingMatchNumbers.add(m.match)));
+  const sortedIncoming = Array.from(incomingMatchNumbers).sort((a, b) => a - b);
+  const renumberMap = new Map<number, number>();
+  sortedIncoming.forEach((oldNum, idx) => renumberMap.set(oldNum, maxExistingMatch + idx + 1));
+
+  const newMaxMatch = maxExistingMatch + sortedIncoming.length;
+
+  // Merge groups
+  const mergedGroups: GeminiGroup[] = [];
+  const processedKeys = new Set<string>();
+
+  // Process existing groups — append new matches if incoming has the same group
+  existing.groups.forEach((existingGroup) => {
+    const key = existingGroup.group.toLowerCase().trim();
+    processedKeys.add(key);
+    const incomingGroup = incoming.groups.find(
+      (g) => g.group.toLowerCase().trim() === key
+    );
+
+    if (!incomingGroup) {
+      // No new data for this group — keep as-is
+      mergedGroups.push(existingGroup);
+      return;
+    }
+
+    // Renumber and append incoming matches
+    const renumberedMatches = incomingGroup.matches.map((m) => {
+      const newNum = renumberMap.get(m.match) ?? m.match;
+      const teamKills = Object.values(m.playerKills ?? {}).reduce((a, b) => a + b, 0);
+      const placementPoints = ps.positionPoints[m.position - 1] ?? 0;
+      const matchPoints = placementPoints + teamKills * ps.killPoints;
+      return { ...m, match: newNum, teamKills, placementPoints, matchPoints };
+    });
+
+    const allMatches = [...existingGroup.matches, ...renumberedMatches];
+    const players = Array.from(new Set([...existingGroup.players, ...incomingGroup.players]));
+    const totals = {
+      totalPoints: allMatches.reduce((a, m) => a + m.matchPoints, 0),
+      chickenDinners: allMatches.filter((m) => m.position === 1).length,
+      totalPlacementPoints: allMatches.reduce((a, m) => a + m.placementPoints, 0),
+      totalKills: allMatches.reduce((a, m) => a + m.teamKills, 0),
+      lastMatchPosition: allMatches[allMatches.length - 1]?.position ?? 0,
+    };
+
+    mergedGroups.push({
+      ...existingGroup,
+      players,
+      matches: allMatches,
+      totals,
+      rank: existingGroup.rank,
+    });
+  });
+
+  // Add groups that only exist in incoming data
+  incoming.groups.forEach((incomingGroup) => {
+    const key = incomingGroup.group.toLowerCase().trim();
+    if (processedKeys.has(key)) return;
+
+    const renumberedMatches = incomingGroup.matches.map((m) => {
+      const newNum = renumberMap.get(m.match) ?? m.match;
+      const teamKills = Object.values(m.playerKills ?? {}).reduce((a, b) => a + b, 0);
+      const placementPoints = ps.positionPoints[m.position - 1] ?? 0;
+      const matchPoints = placementPoints + teamKills * ps.killPoints;
+      return { ...m, match: newNum, teamKills, placementPoints, matchPoints };
+    });
+
+    const totals = {
+      totalPoints: renumberedMatches.reduce((a, m) => a + m.matchPoints, 0),
+      chickenDinners: renumberedMatches.filter((m) => m.position === 1).length,
+      totalPlacementPoints: renumberedMatches.reduce((a, m) => a + m.placementPoints, 0),
+      totalKills: renumberedMatches.reduce((a, m) => a + m.teamKills, 0),
+      lastMatchPosition: renumberedMatches[renumberedMatches.length - 1]?.position ?? 0,
+    };
+
+    mergedGroups.push({
+      ...incomingGroup,
+      matches: renumberedMatches,
+      totals,
+    });
+  });
+
+  // Recompute ranks by total points descending
+  mergedGroups.sort((a, b) => b.totals.totalPoints - a.totals.totalPoints);
+  mergedGroups.forEach((g, i) => (g.rank = i + 1));
+
+  return { matches_detected: newMaxMatch, groups: mergedGroups };
+}
 
 /** Normalize raw Gemini output — clean player names, compute totals */
 export function normalizeGeminiData(raw: GeminiOutput, tournament: Tournament): GeminiOutput {

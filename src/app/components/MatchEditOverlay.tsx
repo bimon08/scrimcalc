@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { X, ChevronLeft, ChevronRight, Check as CheckIcon, RotateCcw } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Check as CheckIcon, RotateCcw, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Tournament, AssignedGroup, GroupMatch, DEFAULT_BGMI_POINTS } from "@/lib/types";
 
@@ -10,6 +10,8 @@ interface Props {
   matchesDetected: number;
   onSave: (updatedGroups: { groupLabel: string; matches: GroupMatch[] }[]) => void;
   onClose: () => void;
+  onAddMatch?: () => void;
+  onDeleteMatch?: (matchNum: number) => void;
 }
 
 interface EditableEntry {
@@ -19,8 +21,9 @@ interface EditableEntry {
   playerKills: Record<string, number>;
 }
 
-export default function MatchEditOverlay({ tournament, groups, matchesDetected, onSave, onClose }: Props) {
+export default function MatchEditOverlay({ tournament, groups, matchesDetected, onSave, onClose, onAddMatch, onDeleteMatch }: Props) {
   const [activeMatch, setActiveMatch] = useState(1);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   // Build editable state: deep clone all match data from all groups
   const [editData, setEditData] = useState<Map<string, EditableEntry[]>>(() => {
@@ -192,6 +195,16 @@ export default function MatchEditOverlay({ tournament, groups, matchesDetected, 
               Match {mn}
             </button>
           ))}
+          {onAddMatch && (
+            <button
+              onClick={() => { onAddMatch(); }}
+              className="shrink-0 h-9 w-9 rounded-xl flex items-center justify-center transition-all active:scale-95"
+              style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", color: "#4ade80" }}
+              title="Add match"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         {/* Match navigation arrows + title */}
@@ -204,9 +217,44 @@ export default function MatchEditOverlay({ tournament, groups, matchesDetected, 
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <p className="text-sm font-bold text-white">
-            Match {activeMatch} <span className="text-zinc-500 font-normal text-xs">/ {matchesDetected}</span>
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-bold text-white">
+              Match {activeMatch} <span className="text-zinc-500 font-normal text-xs">/ {matchesDetected}</span>
+            </p>
+            {onDeleteMatch && matchesDetected > 1 && (
+              confirmDelete === activeMatch ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      const deleting = activeMatch;
+                      if (activeMatch >= matchesDetected) setActiveMatch(Math.max(1, matchesDetected - 1));
+                      setConfirmDelete(null);
+                      onDeleteMatch(deleting);
+                    }}
+                    className="px-2 py-1 rounded-md text-[10px] font-bold transition-all active:scale-95"
+                    style={{ background: "rgba(239,68,68,0.2)", color: "#f87171" }}
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(null)}
+                    className="px-2 py-1 rounded-md text-[10px] font-medium text-zinc-500 transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(activeMatch)}
+                  className="p-1 rounded-md transition-all active:scale-95"
+                  style={{ color: "rgba(239,68,68,0.5)" }}
+                  title="Delete this match"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )
+            )}
+          </div>
           <button
             onClick={() => setActiveMatch((p) => Math.min(matchesDetected, p + 1))}
             disabled={activeMatch === matchesDetected}
