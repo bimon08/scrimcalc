@@ -11,8 +11,9 @@ export function computeStandings(t: Tournament): StandingRow[] {
     const matches = group.matches.map((m) => {
       const teamKills = Object.values(m.playerKills ?? {}).reduce((a, b) => a + b, 0);
       const placementPoints = ps.positionPoints[m.position - 1] ?? 0;
-      const matchPoints = placementPoints + teamKills * ps.killPoints;
-      return { ...m, teamKills, placementPoints, matchPoints };
+      const penalty = m.penalty ?? 0;
+      const matchPoints = placementPoints + teamKills * ps.killPoints - penalty;
+      return { ...m, teamKills, placementPoints, matchPoints, penalty };
     });
     const totals = {
       totalPoints: matches.reduce((a, m) => a + m.matchPoints, 0),
@@ -26,6 +27,7 @@ export function computeStandings(t: Tournament): StandingRow[] {
   const rows: StandingRow[] = groups.map((group) => {
     const teamId = assignMap[group.group];
     const team = t.teams.find((tm) => tm.id === teamId);
+    const matchPenalties = group.matches.reduce((a, m) => a + (m.penalty ?? 0), 0);
     return {
       teamId: teamId || group.group,
       teamName: team?.name || group.group,
@@ -38,6 +40,7 @@ export function computeStandings(t: Tournament): StandingRow[] {
       lastMatchPosition: group.totals.lastMatchPosition,
       positions: group.matches.map((m) => m.position),
       matchCount: group.matches.length,
+      penalty: matchPenalties > 0 ? matchPenalties : undefined,
     };
   }).filter((row) => {
     const team = t.teams.find((tm) => tm.id === row.teamId);
@@ -57,14 +60,16 @@ export function computeStandings(t: Tournament): StandingRow[] {
     });
   });
 
-  // Apply penalties (group stage only — finals are exempt)
-  const penalties = t.penalties ?? {};
+  // Legacy: apply old tournament.penalties if any exist (backward compat)
+  const legacyPenalties = t.penalties ?? {};
   rows.forEach((row) => {
     const team = t.teams.find((tm) => tm.id === row.teamId);
     if (team?.group === "final") return;
-    const pen = penalties[row.teamId] ?? 0;
-    row.totalPoints -= pen;
-    row.penalty = pen;
+    const pen = legacyPenalties[row.teamId] ?? 0;
+    if (pen > 0) {
+      row.totalPoints -= pen;
+      row.penalty = (row.penalty ?? 0) + pen;
+    }
   });
 
   rows.sort(compareTiebreaker);
@@ -80,8 +85,9 @@ export function normalizeAndAssign(t: Tournament) {
     const matches = g.matches.map((m) => {
       const teamKills = Object.values(m.playerKills ?? {}).reduce((a, b) => a + b, 0);
       const placementPoints = ps.positionPoints[m.position - 1] ?? 0;
-      const matchPoints = placementPoints + teamKills * ps.killPoints;
-      return { ...m, teamKills, placementPoints, matchPoints };
+      const penalty = m.penalty ?? 0;
+      const matchPoints = placementPoints + teamKills * ps.killPoints - penalty;
+      return { ...m, teamKills, placementPoints, matchPoints, penalty };
     });
     const totals = {
       totalPoints: matches.reduce((a, m) => a + m.matchPoints, 0),

@@ -175,7 +175,7 @@ export default function MainView({
                           <button onClick={() => setRenamingId(null)} className="shrink-0 text-zinc-500 text-xs px-1">✕</button>
                         </div>
                       ) : (
-                        <p className="text-sm font-bold text-white truncate active:underline" onDoubleClick={e => { e.stopPropagation(); setRenamingId(t.id); setRenameValue(t.name); }}>{t.name}</p>
+                        <p className={`text-sm font-bold text-white active:underline ${isOpen ? "" : "truncate"}`} onDoubleClick={e => { e.stopPropagation(); setRenamingId(t.id); setRenameValue(t.name); }}>{t.name}</p>
                       )}
                       <div className="flex items-center gap-2 mt-0.5">
                         <p className="text-xs" style={{ color: "rgba(167,139,250,0.5)" }}>Teams: {t.teams.filter(tm => !tm.out).length}{t.splitEnabled && ` · ${t.groupCount ?? 2} Groups`}</p>

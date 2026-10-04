@@ -19,6 +19,7 @@ interface EditableEntry {
   teamName: string;
   position: number;
   playerKills: Record<string, number>;
+  penalty: number;
 }
 
 export default function MatchEditOverlay({ tournament, groups, matchesDetected, onSave, onClose, onAddMatch, onDeleteMatch }: Props) {
@@ -38,6 +39,7 @@ export default function MatchEditOverlay({ tournament, groups, matchesDetected, 
             teamName: g.teamName || g.group,
             position: match.position,
             playerKills: { ...match.playerKills },
+            penalty: match.penalty ?? 0,
           });
         }
       });
@@ -61,6 +63,7 @@ export default function MatchEditOverlay({ tournament, groups, matchesDetected, 
             teamName: g.teamName || g.group,
             position: match.position,
             playerKills: { ...match.playerKills },
+            penalty: match.penalty ?? 0,
           });
         }
       });
@@ -95,10 +98,20 @@ export default function MatchEditOverlay({ tournament, groups, matchesDetected, 
     });
   };
 
+  const updatePenalty = (entryIdx: number, value: number) => {
+    setEditData((prev) => {
+      const next = new Map(prev);
+      const entries = [...(next.get(`M${activeMatch}`) ?? [])];
+      entries[entryIdx] = { ...entries[entryIdx], penalty: value };
+      next.set(`M${activeMatch}`, entries);
+      return next;
+    });
+  };
+
   const resetCurrentMatch = () => {
     const orig = originalData.get(`M${activeMatch}`);
     if (orig) {
-      setEditData((prev) => {
+      setEditData((prev: Map<string, EditableEntry[]>) => {
         const next = new Map(prev);
         next.set(`M${activeMatch}`, orig.map((e) => ({ ...e, playerKills: { ...e.playerKills } })));
         return next;
@@ -128,13 +141,15 @@ export default function MatchEditOverlay({ tournament, groups, matchesDetected, 
 
         const teamKills = Object.values(entry.playerKills).reduce((a, b) => a + b, 0);
         const placementPoints = ps.positionPoints[entry.position - 1] ?? 0;
-        const matchPoints = placementPoints + teamKills * ps.killPoints;
+        const penalty = entry.penalty ?? 0;
+        const matchPoints = placementPoints + teamKills * ps.killPoints - penalty;
 
         matches[matchIdx] = {
           ...matches[matchIdx],
           position: entry.position,
           playerKills: { ...entry.playerKills },
           teamKills,
+          penalty,
           placementPoints,
           matchPoints,
         };
@@ -276,7 +291,8 @@ export default function MatchEditOverlay({ tournament, groups, matchesDetected, 
               const kills = totalKills(entry);
               const ps = tournament.pointSystem ?? DEFAULT_BGMI_POINTS;
               const pp = ps.positionPoints[entry.position - 1] ?? 0;
-              const pts = pp + kills * ps.killPoints;
+              const pen = entry.penalty ?? 0;
+              const pts = pp + kills * ps.killPoints - pen;
 
               return (
                 <div
@@ -311,7 +327,7 @@ export default function MatchEditOverlay({ tournament, groups, matchesDetected, 
                       <p className="text-sm font-bold text-white truncate">{entry.teamName}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[10px] text-violet-400 font-semibold">{pts} pts</span>
-                        <span className="text-[10px] text-zinc-500">({pp}pp + {kills}k)</span>
+                        <span className="text-[10px] text-zinc-500">({pp}pp + {kills}k{pen > 0 ? ` − ${pen}` : ""})</span>
                       </div>
                     </div>
                   </div>
@@ -349,6 +365,19 @@ export default function MatchEditOverlay({ tournament, groups, matchesDetected, 
                           </div>
                         ))}
                       </div>
+                    </div>
+
+                    {/* Deduction */}
+                    <div className="flex items-center gap-3">
+                      <label className="text-[11px] text-red-400/70 shrink-0 w-14">Deduction</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={entry.penalty || ""}
+                        placeholder="0"
+                        onChange={(e) => updatePenalty(idx, Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-16 bg-zinc-800 border border-red-900/40 rounded-lg px-2.5 py-1.5 text-xs text-red-300 text-center focus:outline-none focus:border-red-500/50 transition-colors placeholder:text-zinc-600"
+                      />
                     </div>
                   </div>
                 </div>

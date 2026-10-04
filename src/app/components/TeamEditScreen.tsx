@@ -126,10 +126,6 @@ export default function TeamEditScreen({
               {statPill(<Trophy className="h-3.5 w-3.5" style={{ color:"#a78bfa" }} />, "WIN", wins)}
               {statPill(<Hash className="h-3.5 w-3.5" style={{ color:"#a78bfa" }} />, "MP", matchCount)}
             </div>
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <button className="py-3 rounded-2xl text-sm font-semibold press-scale" style={{ background:"rgba(124,58,237,0.3)", color:"#e9d5ff" }}>Add bonus points</button>
-              <button className="py-3 rounded-2xl text-sm font-semibold press-scale" style={{ background:"rgba(255,255,255,0.06)", color:"rgba(196,181,253,0.7)" }}>Add penalty points</button>
-            </div>
           </div>
         )}
 

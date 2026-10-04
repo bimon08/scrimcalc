@@ -94,14 +94,10 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sub.pendingPlanDays, pageLoaded]);
 
-  // Guarded save — blocks saving when subscription expired
+  // Save is always allowed — subscription gates specific features, not saving itself
   const save = useCallback((t: Tournament) => {
-    if (!sub.isActive && !sub.isAdmin) {
-      sub.setShowNudge(true);
-      return;
-    }
     rawSave(t);
-  }, [rawSave, sub]);
+  }, [rawSave]);
 
   const [showCreate, setShowCreate] = useState(false);
   const [createName, setCreateName] = useState("");
@@ -217,8 +213,10 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
 
   const recomputeStandings = (t: Tournament) => setStandings(computeStandingsFromTournament(t));
 
+  // Only premium actions are gated; basic features (edit, bookings, room-info, rules) are free
+  const PAID_ACTIONS = new Set(["calculate", "tables", "warheads", "fraggers", "slots"]);
   const openAction = (t: Tournament, action: string) => {
-    if (!sub.isActive && !sub.isAdmin) { sub.setShowNudge(true); return; }
+    if (PAID_ACTIONS.has(action) && !sub.isActive && !sub.isAdmin) { sub.setShowNudge(true); return; }
     setTournament(t);
     const { groups: g, assignments: a, matchesDetected: md } = normalizeAndAssign(t);
     setGroups(g); setAssignments(a); setMatchesDetected(md);
@@ -238,7 +236,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
   };
 
   const handleCreate = () => {
-    if (!sub.isActive && !sub.isAdmin) { sub.setShowNudge(true); return; }
+    // Tournament creation is free for all users
     if (!createName.trim()) return;
     const t = createTournament(createName.trim());
     setTournaments((prev) => [...prev, t]);
@@ -343,7 +341,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
   };
 
   const handleDeleteTournament = async (id: string) => {
-    if (!sub.isActive && !sub.isAdmin) { sub.setShowNudge(true); return; }
+    // Tournament deletion is free for all users
     setTournaments((prev) => {
       const next = prev.filter(t => t.id !== id);
       // Update local cache so deleted tournament doesn't flash back on refresh

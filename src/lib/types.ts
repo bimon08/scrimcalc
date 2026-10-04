@@ -22,6 +22,7 @@ export interface GroupMatch {
   playerKills: Record<string, number>;
   teamKills: number;
   matchPoints: number;
+  penalty?: number;       // penalty points deducted in this match
 }
 
 export interface GroupTotals {
