@@ -8,6 +8,8 @@ export interface Team {
   players?: string[];
   out?: boolean;
   group?: string;  // Group label ("A", "B", "C"...) or "waiting"
+  logo?: string;   // Base64 data URL for team logo
+  tags?: string[]; // Searchable aliases
 }
 
 export interface PlayerKills {

@@ -304,10 +304,16 @@ export default function AddTeamsScreen({
                     onEditTeam?.(team);
                   }}
                 >
-                  <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 text-white text-xs font-bold"
-                    style={{ background: avatarColors[idx % avatarColors.length] }}>
-                    {initials(team.name)}
-                  </div>
+                  {team.logo ? (
+                    <div className="h-9 w-9 rounded-xl shrink-0 overflow-hidden" style={{ border: "1px solid rgba(124,58,237,0.25)" }}>
+                      <img src={team.logo} alt={team.name} className="h-full w-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 text-white text-xs font-bold"
+                      style={{ background: avatarColors[idx % avatarColors.length] }}>
+                      {initials(team.name)}
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate text-white">
                       {tournament.splitEnabled && team.group && team.group !== "waiting" && <span className="mr-1 text-[9px] px-1 py-0.5 rounded" style={{ background: "rgba(124,58,237,0.2)", color: "#c4b5fd" }}>{team.group}</span>}

@@ -188,7 +188,10 @@ export default function SlotsModal({ tournament, groupFilter, setGroupFilter, on
               return (
                 <div key={row.id} style={{ flex: 1, display: "flex", alignItems: "center", padding: "0 2px", borderBottom: idx < slotAssignments.length - 1 ? `1px solid ${t.rowBorder}` : "none", background: idx % 2 === 0 ? t.rowEven : t.rowOdd, minHeight: 0 }}>
                   <span style={{ width: slotW, textAlign: "center", color: ac, fontSize: slotFs, fontWeight: 900, fontFamily: "monospace" }}>{row.slot}</span>
-                  <span style={{ width: "55px", color: t.cellText, fontSize: rFs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: "3px" }}>{row.name}</span>
+                  <span style={{ width: "55px", color: t.cellText, fontSize: rFs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: "3px", display: "flex", alignItems: "center", gap: "2px" }}>
+                    {row.logo && <img src={row.logo} alt="" style={{ width: rFs, height: rFs, borderRadius: "2px", objectFit: "cover", flexShrink: 0 }} />}
+                    {row.name}
+                  </span>
                   {padded.map((p, pi) => (
                     <span key={pi} style={{ flex: 1, textAlign: "center", color: p ? t.cellText : "rgba(255,255,255,0.2)", fontSize: rFs, whiteSpace: "nowrap", overflow: "hidden" }}>{p || "—"}</span>
                   ))}
@@ -229,7 +232,8 @@ export default function SlotsModal({ tournament, groupFilter, setGroupFilter, on
                   >
                     {row.slot}
                   </span>
-                  <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: "4px" }}>
+                  <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: "4px", display: "flex", alignItems: "center", gap: "2px" }}>
+                    {row.logo && <img src={row.logo} alt="" style={{ width: fs, height: fs, borderRadius: "2px", objectFit: "cover", flexShrink: 0 }} />}
                     {row.name}
                   </span>
                 </div>
@@ -309,7 +313,8 @@ export default function SlotsModal({ tournament, groupFilter, setGroupFilter, on
                   >
                     {row.slot}
                   </span>
-                  <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: "5px" }}>
+                  <span style={{ flex: 1, color: t.cellText, fontSize: fs, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: "5px", display: "flex", alignItems: "center", gap: "2px" }}>
+                    {row.logo && <img src={row.logo} alt="" style={{ width: fs, height: fs, borderRadius: "2px", objectFit: "cover", flexShrink: 0 }} />}
                     {row.name}
                   </span>
                 </div>

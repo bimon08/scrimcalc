@@ -1,5 +1,6 @@
 "use client";
-import { ChevronDown, Save, Trash2, Pencil, Phone, Tag, TrendingUp, X, BarChart2, Trophy, Hash, ListOrdered, UserPlus, Plus, Minus } from "lucide-react";
+import React, { useRef } from "react";
+import { ChevronDown, Save, Trash2, Pencil, Phone, Tag, TrendingUp, X, BarChart2, Trophy, Hash, ListOrdered, UserPlus, Plus, Minus, ImageIcon, Camera } from "lucide-react";
 import { Team, Tournament } from "@/lib/types";
 
 interface EditForm { name: string; tags: string; players: string; phone: string; }
@@ -25,6 +26,41 @@ export default function TeamEditScreen({
   save, onSave, onClose,
 }: Props) {
   const liveTeam = tournament.teams.find((t) => t.id === team.id) || team;
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX = 256;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL("image/webp", 0.8);
+        const updated = { ...tournament, teams: tournament.teams.map((t) => t.id === liveTeam.id ? { ...t, logo: dataUrl } : t) };
+        save(updated);
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const removeLogo = () => {
+    const updated = { ...tournament, teams: tournament.teams.map((t) => t.id === liveTeam.id ? { ...t, logo: undefined } : t) };
+    save(updated);
+  };
+
   const standing = tournament.geminiData?.groups.find((g) => {
     const assignedId = tournament.assignments?.[g.group];
     return assignedId === liveTeam.id;
@@ -44,18 +80,53 @@ export default function TeamEditScreen({
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col anim-fade-in" style={{ background:"#0d0820" }}>
+      {/* Hidden file input */}
+      <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+
       {/* Top bar */}
       <div className="flex items-center justify-between px-5 pt-12 pb-4 shrink-0">
         <button onClick={onClose} className="p-2 rounded-xl press-scale" style={{ background:"rgba(255,255,255,0.06)" }}>
           <ChevronDown className="h-5 w-5 text-white rotate-90" />
         </button>
-        <p className="text-base font-bold text-white truncate mx-3 flex-1 text-center">{liveTeam.name}</p>        <div className="flex items-center gap-2">
+        <p className="text-base font-bold text-white truncate mx-3 flex-1 text-center">{liveTeam.name}</p>
+        <div className="flex items-center gap-2">
           <button onClick={onSave} className="flex items-center gap-2 px-5 py-2 rounded-full font-semibold text-sm press-scale" style={{ background:"rgba(139,92,246,0.25)", border:"1px solid rgba(139,92,246,0.4)", color:"#c4b5fd" }}>
             <Save className="h-4 w-4" /> Save
           </button>
           <button onClick={() => { save({ ...tournament, teams: tournament.teams.filter((t) => t.id !== liveTeam.id) }); onClose(); }} className="p-2 rounded-xl press-scale" style={{ background:"rgba(239,68,68,0.1)", color:"rgba(239,68,68,0.7)" }}>
             <Trash2 className="h-4 w-4" />
           </button>
+        </div>
+      </div>
+
+      {/* Team Logo */}
+      <div className="flex items-center gap-4 px-5 pb-4">
+        <button
+          onClick={() => logoInputRef.current?.click()}
+          className="relative h-16 w-16 rounded-2xl shrink-0 overflow-hidden press-scale group"
+          style={{ background: liveTeam.logo ? "transparent" : "rgba(124,58,237,0.15)", border: liveTeam.logo ? "2px solid rgba(124,58,237,0.3)" : "2px dashed rgba(124,58,237,0.35)" }}
+        >
+          {liveTeam.logo ? (
+            <>
+              <img src={liveTeam.logo} alt="Team logo" className="h-full w-full object-cover" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Camera className="h-5 w-5 text-white" />
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full w-full gap-0.5">
+              <ImageIcon className="h-5 w-5" style={{ color:"#8b5cf6" }} />
+              <p className="text-[7px] font-semibold" style={{ color:"rgba(196,181,253,0.6)" }}>Add Logo</p>
+            </div>
+          )}
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="text-lg font-bold text-white truncate">{liveTeam.name}</p>
+          {liveTeam.logo && (
+            <button onClick={removeLogo} className="text-[10px] font-medium mt-0.5 press-scale" style={{ color:"rgba(239,68,68,0.6)" }}>
+              Remove logo
+            </button>
+          )}
         </div>
       </div>
 
