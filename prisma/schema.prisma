@@ -87,4 +87,3 @@ model SlotBooking {
   @@unique([walletId, tournamentId])
   @@map("slot_bookings")
 }
-
