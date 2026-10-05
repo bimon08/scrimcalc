@@ -113,7 +113,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
   const [addForm, setAddForm] = useState({ name: "", tags: "", phone: "" });
   const [playerInputs, setPlayerInputs] = useState<string[]>([""]);  
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
-  const [editTeamForm, setEditTeamForm] = useState({ name: "", tags: "", players: "", phone: "" });
+  const [editTeamForm, setEditTeamForm] = useState({ name: "", tags: "", players: "", phone: "", logo: "" });
 
   const [addScreenSnapshot, setAddScreenSnapshot] = useState<{ teamCount: number; entryFee: number; isActive: boolean } | null>(null);
   const [showSlots, setShowSlots] = useState(false);
@@ -328,6 +328,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
       name: editTeamForm.name.trim() || liveTeam.name,
       tags: editTeamForm.tags.split(",").map(t=>t.trim()).filter(Boolean),
       phone: editTeamForm.phone.trim() || liveTeam.phone,
+      logo: editTeamForm.logo || undefined,
     };
     const updated = tournament.teams.map((t) => t.id === editingTeam.id ? updatedTeam : t);
     save({ ...tournament, teams: updated });
@@ -622,6 +623,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
               tags: "",
               players: (team.players ?? []).join(", "),
               phone: team.phone ?? "",
+              logo: team.logo ?? "",
             });
           }}
           pastTeams={pastTeams}

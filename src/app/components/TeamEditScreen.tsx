@@ -3,7 +3,7 @@ import React, { useRef } from "react";
 import { ChevronDown, Save, Trash2, Pencil, Phone, Tag, TrendingUp, X, BarChart2, Trophy, Hash, ListOrdered, UserPlus, Plus, Minus, ImageIcon, Camera } from "lucide-react";
 import { Team, Tournament } from "@/lib/types";
 
-interface EditForm { name: string; tags: string; players: string; phone: string; }
+interface EditForm { name: string; tags: string; players: string; phone: string; logo: string; }
 
 interface Props {
   team: Team;
@@ -47,8 +47,7 @@ export default function TeamEditScreen({
         const ctx = canvas.getContext("2d")!;
         ctx.drawImage(img, 0, 0, w, h);
         const dataUrl = canvas.toDataURL("image/webp", 0.8);
-        const updated = { ...tournament, teams: tournament.teams.map((t) => t.id === liveTeam.id ? { ...t, logo: dataUrl } : t) };
-        save(updated);
+        setEditTeamForm((f) => ({ ...f, logo: dataUrl }));
       };
       img.src = reader.result as string;
     };
@@ -57,9 +56,11 @@ export default function TeamEditScreen({
   };
 
   const removeLogo = () => {
-    const updated = { ...tournament, teams: tournament.teams.map((t) => t.id === liveTeam.id ? { ...t, logo: undefined } : t) };
-    save(updated);
+    setEditTeamForm((f) => ({ ...f, logo: "" }));
   };
+
+  // Use editTeamForm.logo for preview (pending state), not liveTeam.logo
+  const displayLogo = editTeamForm.logo;
 
   const standing = tournament.geminiData?.groups.find((g) => {
     const assignedId = tournament.assignments?.[g.group];
@@ -74,7 +75,7 @@ export default function TeamEditScreen({
   const statPill = (icon: React.ReactNode, label: string, val: number | string) => (
     <div className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 rounded-2xl" style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.07)" }}>
       <div className="h-7 w-7 rounded-full flex items-center justify-center shrink-0" style={{ background:"rgba(124,58,237,0.25)" }}>{icon}</div>
-      <div><p className="text-[9px] font-bold tracking-widest" style={{ color:"rgba(139,92,246,0.7)" }}>{label}</p><p className="text-sm font-bold text-white">{val}</p></div>
+      <div className="min-w-0"><p className="text-[9px] font-bold tracking-widest" style={{ color:"rgba(139,92,246,0.7)" }}>{label}</p><p className="text-sm font-bold text-white">{val}</p></div>
     </div>
   );
 
@@ -88,8 +89,8 @@ export default function TeamEditScreen({
         <button onClick={onClose} className="p-2 rounded-xl press-scale" style={{ background:"rgba(255,255,255,0.06)" }}>
           <ChevronDown className="h-5 w-5 text-white rotate-90" />
         </button>
-        <p className="text-base font-bold text-white truncate mx-3 flex-1 text-center">{liveTeam.name}</p>
-        <div className="flex items-center gap-2">
+        <p className="text-base font-bold text-white truncate mx-3 flex-1 text-center min-w-0">{liveTeam.name}</p>
+        <div className="flex items-center gap-2 shrink-0">
           <button onClick={onSave} className="flex items-center gap-2 px-5 py-2 rounded-full font-semibold text-sm press-scale" style={{ background:"rgba(139,92,246,0.25)", border:"1px solid rgba(139,92,246,0.4)", color:"#c4b5fd" }}>
             <Save className="h-4 w-4" /> Save
           </button>
@@ -104,11 +105,11 @@ export default function TeamEditScreen({
         <button
           onClick={() => logoInputRef.current?.click()}
           className="relative h-16 w-16 rounded-2xl shrink-0 overflow-hidden press-scale group"
-          style={{ background: liveTeam.logo ? "transparent" : "rgba(124,58,237,0.15)", border: liveTeam.logo ? "2px solid rgba(124,58,237,0.3)" : "2px dashed rgba(124,58,237,0.35)" }}
+          style={{ background: displayLogo ? "transparent" : "rgba(124,58,237,0.15)", border: displayLogo ? "2px solid rgba(124,58,237,0.3)" : "2px dashed rgba(124,58,237,0.35)" }}
         >
-          {liveTeam.logo ? (
+          {displayLogo ? (
             <>
-              <img src={liveTeam.logo} alt="Team logo" className="h-full w-full object-cover" />
+              <img src={displayLogo} alt="Team logo" className="h-full w-full object-cover" />
               <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Camera className="h-5 w-5 text-white" />
               </div>
@@ -122,7 +123,7 @@ export default function TeamEditScreen({
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-lg font-bold text-white truncate">{liveTeam.name}</p>
-          {liveTeam.logo && (
+          {displayLogo && (
             <button onClick={removeLogo} className="text-[10px] font-medium mt-0.5 press-scale" style={{ color:"rgba(239,68,68,0.6)" }}>
               Remove logo
             </button>
@@ -139,9 +140,9 @@ export default function TeamEditScreen({
 
         {showTeamDetails && (
           <div className="space-y-3 mb-5">
-            <div className="flex items-center gap-3">
-              <p className="text-sm font-medium w-24 shrink-0" style={{ color:"rgba(196,181,253,0.6)" }}>Name</p>
-              <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-2xl" style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)" }}>
+            <div className="flex items-center gap-3 min-w-0">
+              <p className="text-sm font-medium w-20 shrink-0" style={{ color:"rgba(196,181,253,0.6)" }}>Name</p>
+              <div className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 rounded-2xl overflow-hidden" style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)" }}>
                 <Pencil className="h-3.5 w-3.5 shrink-0" style={{ color:"rgba(196,181,253,0.4)" }} />
                 <input 
                   value={editTeamForm.name} 
@@ -155,9 +156,9 @@ export default function TeamEditScreen({
                 />
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <p className="text-sm font-medium w-24 shrink-0" style={{ color:"rgba(196,181,253,0.6)" }}>Phone</p>
-              <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-2xl" style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)" }}>
+            <div className="flex items-center gap-3 min-w-0">
+              <p className="text-sm font-medium w-20 shrink-0" style={{ color:"rgba(196,181,253,0.6)" }}>Phone</p>
+              <div className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 rounded-2xl overflow-hidden" style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)" }}>
                 <Phone className="h-3.5 w-3.5 shrink-0" style={{ color:"rgba(196,181,253,0.4)" }} />
                 <input 
                   type="tel" 
@@ -173,9 +174,9 @@ export default function TeamEditScreen({
                 />
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <p className="text-sm font-medium w-24 shrink-0" style={{ color:"rgba(196,181,253,0.6)" }}>Tags</p>
-              <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-2xl" style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)" }}>
+            <div className="flex items-center gap-3 min-w-0">
+              <p className="text-sm font-medium w-20 shrink-0" style={{ color:"rgba(196,181,253,0.6)" }}>Tags</p>
+              <div className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 rounded-2xl overflow-hidden" style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)" }}>
                 <Tag className="h-3.5 w-3.5 shrink-0" style={{ color:"rgba(196,181,253,0.4)" }} />
                 <input 
                   value={editTeamForm.tags} 
