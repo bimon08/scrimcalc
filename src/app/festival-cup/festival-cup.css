@@ -6,6 +6,7 @@
 body:has(.fc-page) {
   padding-top: 0 !important;
   padding-bottom: 0 !important;
+  background: #fdf2f8 !important;
 }
 
 /* Hide the fixed top header (GlobalMenu) */
@@ -734,9 +735,10 @@ body:has(.fc-page) nav.fixed {
 /* ── Footer ── */
 .fc-foot {
   font-size: 11px;
-  color: #9ca3af;
+  color: #6b7280;
   text-align: center;
-  padding-top: 8px;
+  padding: 8px 0 16px;
+  font-weight: 500;
 }
 
 /* ── Success ── */
