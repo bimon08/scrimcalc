@@ -72,6 +72,8 @@ export default function FestivalCupPage() {
   const [p3Ign, setP3Ign] = useState(isDev ? "SouLViper" : ""); const [p3Id, setP3Id] = useState(isDev ? "5287431960" : "");
   const [p4Ign, setP4Ign] = useState(isDev ? "SouLRonak" : ""); const [p4Id, setP4Id] = useState(isDev ? "5301278465" : "");
   const [paymentProof, setPaymentProof] = useState<File | null>(null);
+  const [utrNumber, setUtrNumber] = useState(isDev ? "664195439987" : "");
+  const [showUtrHelp, setShowUtrHelp] = useState(false);
   const [declaration, setDeclaration] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -81,7 +83,7 @@ export default function FestivalCupPage() {
     () => state !== "" && teamName.trim().length >= 2,
     () => iglName.trim() !== "" && iglId.trim() !== "" && whatsapp.trim().length >= 10 && email.includes("@"),
     () => [p2Ign, p2Id, p3Ign, p3Id, p4Ign, p4Id].every(v => v.trim() !== ""),
-    () => declaration,
+    () => declaration && /^\d{12}$/.test(utrNumber.trim()) && paymentProof !== null,
   ];
 
   const handleSubmit = async () => {
@@ -104,9 +106,10 @@ export default function FestivalCupPage() {
               <div className="s-row"><span>Team</span><strong>{teamName}</strong></div>
               <div className="s-row"><span>IGL</span><strong>{iglName}</strong></div>
               <div className="s-row"><span>State</span><strong>{state}</strong></div>
+              <div className="s-row"><span>UTR / Ref</span><code className="s-utr">{utrNumber}</code></div>
               <div className="s-row"><span>Status</span><span className="s-badge">Pending</span></div>
             </div>
-            <p className="s-note">We&apos;ll verify your payment and confirm via WhatsApp.</p>
+            <p className="s-note">We&apos;ll verify your payment via UTR &amp; screenshot and confirm via WhatsApp.</p>
           </div>
         </div>
       </div>
@@ -257,6 +260,39 @@ export default function FestivalCupPage() {
                 </div>
 
                 <div className="field">
+                  <div className="fl-row">
+                    <label htmlFor="utr" className="fl">
+                      12-Digit UPI Transaction ID / UTR <span className="req">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      className="hint-btn"
+                      onClick={() => setShowUtrHelp(true)}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                      </svg>
+                      Where to find this?
+                    </button>
+                  </div>
+                  <input
+                    id="utr"
+                    className="fi utr-input"
+                    placeholder="Enter 12-digit UTR (e.g. 664195439987)"
+                    value={utrNumber}
+                    maxLength={12}
+                    inputMode="numeric"
+                    onChange={e => setUtrNumber(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                  />
+                  <div className="utr-counter-row">
+                    <span className="utr-pending">Must be 12 digits</span>
+                    <span className={`utr-count ${utrNumber.length === 12 ? "done" : ""}`}>{utrNumber.length}/12</span>
+                  </div>
+                </div>
+
+                <div className="field">
                   <label className="fl">Payment Screenshot <span className="req">*</span></label>
                   <p className="pay-note">Upload your payment image here for confirmation. Make sure the screenshot clearly shows the <strong>UTR / Transaction ID</strong>.</p>
                   <FileZone id="pp" label="Upload payment screenshot" hint="Image or PDF · max 10 MB" accept="image/*,.pdf" file={paymentProof} onFile={setPaymentProof} maxMB={10} />
@@ -300,6 +336,44 @@ export default function FestivalCupPage() {
           Festival Cup · Hosted by Jubilant Divine Esports
         </footer>
       </div>
+
+      {/* ── UTR Visual Guide Modal ── */}
+      {showUtrHelp && (
+        <div className="utr-modal-overlay" onClick={() => setShowUtrHelp(false)}>
+          <div className="utr-modal-card" onClick={e => e.stopPropagation()}>
+            <div className="utr-modal-head">
+              <div>
+                <h3 className="utr-modal-title">12-Digit UPI Transaction ID</h3>
+                <p className="utr-modal-sub">Look for the 12 digits shown on your receipt</p>
+              </div>
+              <button type="button" className="utr-modal-close" onClick={() => setShowUtrHelp(false)} aria-label="Close">✕</button>
+            </div>
+
+            <div className="utr-modal-body">
+              <div className="utr-app-bar">
+                <span className="app-tag"><b>GPay:</b> UPI transaction ID</span>
+                <span className="app-tag"><b>PhonePe:</b> UTR</span>
+                <span className="app-tag"><b>Paytm:</b> UPI Ref No.</span>
+              </div>
+
+              <div className="utr-sample-wrap">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/images/upi-id-guide.png"
+                  alt="UPI transaction ID receipt example"
+                  className="utr-sample-img"
+                />
+              </div>
+            </div>
+
+            <div className="utr-modal-foot">
+              <button type="button" className="btn-primary utr-got-it" onClick={() => setShowUtrHelp(false)}>
+                Got It
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
