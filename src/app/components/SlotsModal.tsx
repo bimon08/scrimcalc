@@ -368,7 +368,7 @@ export default function SlotsModal({ tournament, groupFilter, setGroupFilter, on
     const sqAspect = "1/1";
     const borderDecor = t.layout === "accent-bar" ? { borderLeft: `4px solid ${t.accentColor}` } : t.layout === "bold" ? { border: `2px solid ${t.accentColor}30` } : {};
     const ac = t.accentColor;
-    const badgeLabel = (tournament.splitEnabled && groupFilter !== "all" ? (groupFilter === "final" ? "🏆 Final" : `Group ${groupFilter}`) : "🎯 Slot List") + ` · ${slotAssignments.length} Teams`;
+    const badgeLabel = tournament.splitEnabled && groupFilter !== "all" ? (groupFilter === "final" ? "Final" : `Group ${groupFilter}`) : "Slot List";
 
     // ── BANNER layout ──
     if (t.layout === "banner") {

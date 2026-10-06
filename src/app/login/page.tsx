@@ -1,14 +1,44 @@
 "use client";
-import { signIn } from "next-auth/react";
-import { useState } from "react";
+import { signIn, useSession } from "next-auth/react";
+import { useState, useEffect } from "react";
 import { Users, LogIn } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 const COLLAB_KEY = "sc_collab_key";
 
 export default function LoginPage() {
+  const { status } = useSession();
+  const router = useRouter();
   const [showCollab, setShowCollab] = useState(false);
   const [collabInput, setCollabInput] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (status === "authenticated") router.replace("/");
+  }, [status, router]);
+
+  if (status !== "unauthenticated") {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#0c0914" }}>
+        <div className="flex flex-col items-center gap-5">
+          <div className="relative">
+            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-xl shadow-violet-500/25 animate-pulse">
+              <span className="text-2xl font-black text-white">SC</span>
+            </div>
+            <div className="absolute -inset-2 rounded-3xl border-2 border-violet-500/30 border-t-violet-400 animate-spin" />
+          </div>
+          <div className="flex flex-col items-center gap-1.5">
+            <p className="text-sm font-medium text-violet-300/70">Authenticating…</p>
+            <div className="flex gap-1">
+              <span className="h-1 w-1 rounded-full bg-violet-400/50 animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="h-1 w-1 rounded-full bg-violet-400/50 animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="h-1 w-1 rounded-full bg-violet-400/50 animate-bounce" style={{ animationDelay: "300ms" }} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleCollabJoin = () => {
     const key = collabInput.trim();
