@@ -31,9 +31,21 @@ export default function TeamsPage() {
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#0c0914" }}>
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
-          <p className="text-sm text-violet-300/60">Loading…</p>
+        <div className="flex flex-col items-center gap-5">
+          <div className="relative">
+            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-xl shadow-violet-500/25 animate-pulse">
+              <span className="text-2xl font-black text-white">SC</span>
+            </div>
+            <div className="absolute -inset-2 rounded-3xl border-2 border-violet-500/30 border-t-violet-400 animate-spin" />
+          </div>
+          <div className="flex flex-col items-center gap-1.5">
+            <p className="text-sm font-medium text-violet-300/70">Loading…</p>
+            <div className="flex gap-1">
+              <span className="h-1 w-1 rounded-full bg-violet-400/50 animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="h-1 w-1 rounded-full bg-violet-400/50 animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="h-1 w-1 rounded-full bg-violet-400/50 animate-bounce" style={{ animationDelay: "300ms" }} />
+            </div>
+          </div>
         </div>
       </div>
     );
