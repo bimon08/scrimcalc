@@ -50,9 +50,20 @@ export default function ProfilePage() {
     subColor = "#fbbf24";
   } else if (subEnd) {
     const end = new Date(subEnd);
-    daysLeft = Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    if (daysLeft > 0) {
-      subLabel = `${daysLeft} day${daysLeft !== 1 ? "s" : ""} remaining`;
+    const msLeft = end.getTime() - Date.now();
+    daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+    if (msLeft > 0) {
+      const totalMins = Math.floor(msLeft / (1000 * 60));
+      const d = Math.floor(totalMins / (60 * 24));
+      const h = Math.floor((totalMins % (60 * 24)) / 60);
+      const m = totalMins % 60;
+      if (d > 0) {
+        subLabel = `${d}d ${h}h remaining`;
+      } else if (h > 0) {
+        subLabel = `${h}h ${m}m remaining`;
+      } else {
+        subLabel = `${m}m remaining`;
+      }
       subColor = daysLeft <= 3 ? "#f97316" : "#4ade80";
     } else {
       subLabel = "Expired";
