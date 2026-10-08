@@ -13,7 +13,7 @@ import {
 } from "./components";
 import { useCloudSync } from "./hooks/useCloudSync";
 import { useSubscription } from "./hooks/useSubscription";
-import { createTournament } from "@/lib/storage";
+import { createTournament, parsePointCalcFile } from "@/lib/storage";
 import { computeStandings as computeStandingsFromTournament, normalizeAndAssign } from "@/lib/standings";
 import { parseTeamPaste } from "@/lib/parseTeam";
 import { generatePrompt } from "@/lib/prompt";
@@ -283,6 +283,24 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
     setAddForm({ name: "", tags: "", phone: "" });
     setAddScreenTab("entered"); setAddScreenMode("create"); setShowAddScreen(true);
     setAddScreenSnapshot({ teamCount: draft.teams.length, entryFee: draft.entryFee ?? 0, isActive: draft.isActive ?? false });
+  };
+
+  const handleImportPC = async (file: File) => {
+    try {
+      const buffer = await file.arrayBuffer();
+      const imported = parsePointCalcFile(buffer);
+      const all = [...tournaments, imported];
+      setTournaments(all);
+      setTournament(imported);
+      setShowCreate(false);
+      setCreateName("");
+      toast.success(`"${imported.name}" imported from PointCalc!`);
+      // Open add-teams screen so user can review
+      setAddScreenTab("entered"); setAddScreenMode("create"); setShowAddScreen(true);
+      setAddScreenSnapshot({ teamCount: imported.teams.length, entryFee: imported.entryFee ?? 0, isActive: imported.isActive ?? false });
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to read PointCalc file");
+    }
   };
 
   const handleAddTeamToScreen = () => {
@@ -577,6 +595,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
           onClose={() => closeOverlay(() => { setShowCreate(false); setCreateName(""); setRoundRobin(false); })}
           onCreate={handleCreate}
           onClone={handleCloneCreate}
+          onImportPC={handleImportPC}
         />
       )}
       {/* ADD TEAMS SCREEN */}

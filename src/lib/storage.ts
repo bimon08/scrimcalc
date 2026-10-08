@@ -118,6 +118,116 @@ export function importData(json: string): Tournament {
   return t;
 }
 
+/* ─── PointCalc .pc File Import ─── */
+
+interface PCTournament {
+  name: string;
+  killPoint?: number;
+  roundRobinGroups?: unknown[];
+  timestamp?: number;
+}
+
+interface PCTeamEntity {
+  id?: number;
+  teamName?: string;
+  name?: string;
+  slot?: number;
+  phone?: string;
+  contactNumber?: string;
+  players?: string[];
+  playerNames?: string[];
+}
+
+interface PCPointSystem {
+  position: number;
+  points: number;
+}
+
+interface PCFile {
+  tournament: PCTournament;
+  teamEntities: PCTeamEntity[];
+  players?: Array<{ name?: string; teamName?: string; teamId?: number }>;
+  pointSystemEntity: PCPointSystem[];
+  teamLogosCount?: number;
+  playerLogosCount?: number;
+}
+
+/**
+ * Parse a PointCalc `.pc` file (binary with TNSP header) into a ScrimCalc Tournament.
+ * Format: 4-byte magic "TNSP" + 4-byte big-endian JSON length + JSON body.
+ */
+export function parsePointCalcFile(buffer: ArrayBuffer): Tournament {
+  const bytes = new Uint8Array(buffer);
+
+  // Validate magic header "TNSP"
+  const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+  if (magic !== "TNSP") {
+    throw new Error("Not a valid PointCalc file (missing TNSP header)");
+  }
+
+  // Find the start of JSON (first '{' byte)
+  let jsonStart = -1;
+  for (let i = 4; i < Math.min(bytes.length, 32); i++) {
+    if (bytes[i] === 0x7B) { // '{'
+      jsonStart = i;
+      break;
+    }
+  }
+  if (jsonStart === -1) throw new Error("Could not find JSON data in PointCalc file");
+
+  const decoder = new TextDecoder("utf-8");
+  const jsonStr = decoder.decode(bytes.slice(jsonStart));
+  const pc: PCFile = JSON.parse(jsonStr);
+
+  // Convert teams
+  const teams: import("./types").Team[] = (pc.teamEntities ?? []).map((te, i) => {
+    const name = te.teamName || te.name || `Team ${i + 1}`;
+    const phone = te.phone || te.contactNumber || undefined;
+
+    // Collect player names from team entity or from the players array
+    let playerNames = te.players || te.playerNames || [];
+    if (playerNames.length === 0 && pc.players) {
+      const teamId = te.id;
+      const teamName = te.teamName || te.name;
+      playerNames = pc.players
+        .filter(p => p.teamId === teamId || p.teamName === teamName)
+        .map(p => p.name ?? "")
+        .filter(Boolean);
+    }
+
+    return {
+      id: crypto.randomUUID(),
+      name,
+      phone,
+      slot: te.slot ?? (i + 1),
+      players: playerNames,
+    };
+  });
+
+  // Convert point system — sort by position ascending
+  const sorted = [...(pc.pointSystemEntity ?? [])].sort((a, b) => a.position - b.position);
+  // Extract position points (positions 1..N where points > 0)
+  const positionPoints: number[] = [];
+  for (const entry of sorted) {
+    if (entry.points > 0) {
+      positionPoints.push(entry.points);
+    }
+  }
+
+  const pointSystem: import("./types").PointSystem = {
+    killPoints: pc.tournament.killPoint ?? 1,
+    positionPoints: positionPoints.length > 0 ? positionPoints : [10, 6, 5, 4, 3, 2, 1, 1],
+  };
+
+  return {
+    id: crypto.randomUUID(),
+    name: pc.tournament.name || "Imported Tournament",
+    createdAt: new Date().toISOString(),
+    teams,
+    pointSystem,
+  };
+}
+
 /* ─── Past Teams Pool ─── */
 export interface PastTeam {
   name: string;

@@ -1,5 +1,6 @@
 "use client";
-import { X, Flag, ArrowRight, Trophy } from "lucide-react";
+import { useRef } from "react";
+import { X, Flag, ArrowRight, Trophy, Upload } from "lucide-react";
 import { Tournament } from "@/lib/types";
 
 interface Props {
@@ -11,13 +12,16 @@ interface Props {
   onClose: () => void;
   onCreate: () => void;
   onClone: (t: Tournament) => void;
+  onImportPC?: (file: File) => void;
 }
 
 export default function CreateScreen({
   tournaments, createName, setCreateName,
   roundRobin, setRoundRobin,
-  onClose, onCreate, onClone,
+  onClose, onCreate, onClone, onImportPC,
 }: Props) {
+  const fileRef = useRef<HTMLInputElement>(null);
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col anim-fade-in" style={{ background: "#0a0614" }}>
       <button
@@ -46,7 +50,7 @@ export default function CreateScreen({
           />
         </div>
 
-        <div className="flex items-center gap-3 mb-8">
+        <div className="flex items-center gap-3 mb-5">
           <button onClick={() => setRoundRobin((v) => !v)} className="relative shrink-0 press-scale" style={{ width: 48, height: 28 }}>
             <div className="absolute inset-0 rounded-full transition-colors duration-200" style={{ background: roundRobin ? "rgba(124,58,237,0.9)" : "rgba(255,255,255,0.15)" }} />
             <div className="absolute top-1 left-1 transition-transform duration-200 h-5 w-5 rounded-full bg-white shadow" style={{ transform: roundRobin ? "translateX(20px)" : "translateX(0)" }} />
@@ -56,6 +60,41 @@ export default function CreateScreen({
             GO <ArrowRight className="h-4 w-4" />
           </button>
         </div>
+
+        {/* Import from PointCalc */}
+        {onImportPC && (
+          <>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex-1 border-t" style={{ borderColor: "rgba(255,255,255,0.12)", borderStyle: "dashed" }} />
+              <span className="text-xs font-semibold tracking-widest" style={{ color: "rgba(196,181,253,0.45)" }}>IMPORT</span>
+              <div className="flex-1 border-t" style={{ borderColor: "rgba(255,255,255,0.12)", borderStyle: "dashed" }} />
+            </div>
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl mb-6 press-scale transition-colors"
+              style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)" }}
+            >
+              <div className="h-11 w-11 rounded-xl shrink-0 flex items-center justify-center" style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)" }}>
+                <Upload className="h-5 w-5" style={{ color: "#4ade80" }} />
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-sm font-semibold text-white leading-tight">Import from PointCalc</p>
+                <p className="text-xs mt-0.5" style={{ color: "rgba(74,222,128,0.6)" }}>Open a .pc file to migrate</p>
+              </div>
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pc"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onImportPC(file);
+                e.target.value = "";
+              }}
+            />
+          </>
+        )}
 
         {tournaments.length > 0 && (
           <>
