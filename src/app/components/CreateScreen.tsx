@@ -85,7 +85,7 @@ export default function CreateScreen({
             <input
               ref={fileRef}
               type="file"
-              accept=".pc"
+              accept=".pc,.PC"
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
