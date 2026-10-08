@@ -289,13 +289,13 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
     try {
       const buffer = await file.arrayBuffer();
       const imported = parsePointCalcFile(buffer);
-      const all = [...tournaments, imported];
-      setTournaments(all);
-      setTournament(imported);
+      // Store as draft — will only be saved if user confirms (same as clone flow)
+      setPendingCloneDraft(imported);
+      setExcludedCloneTeams(new Set()); // all teams start included for imports
       setShowCreate(false);
       setCreateName("");
-      toast.success(`"${imported.name}" imported from PointCalc!`);
-      // Open add-teams screen so user can review
+      toast.success(`"${imported.name}" loaded — review and confirm`);
+      setAddForm({ name: "", tags: "", phone: "" });
       setAddScreenTab("entered"); setAddScreenMode("create"); setShowAddScreen(true);
       setAddScreenSnapshot({ teamCount: imported.teams.length, entryFee: imported.entryFee ?? 0, isActive: imported.isActive ?? false });
     } catch (err) {
