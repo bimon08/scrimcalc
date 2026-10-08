@@ -1,6 +1,6 @@
 "use client";
-import { useRef } from "react";
-import { X, Flag, ArrowRight, Trophy, Upload } from "lucide-react";
+import { useRef, useState } from "react";
+import { X, Flag, ArrowRight, Trophy, Upload, ChevronRight } from "lucide-react";
 import { Tournament } from "@/lib/types";
 
 interface Props {
@@ -21,6 +21,8 @@ export default function CreateScreen({
   onClose, onCreate, onClone, onImportPC,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [showPCGuide, setShowPCGuide] = useState(false);
+  const isFirstTime = tournaments.length === 0;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col anim-fade-in" style={{ background: "#0a0614" }}>
@@ -37,10 +39,75 @@ export default function CreateScreen({
           Create a tournament
         </h1>
 
+        {/* First-time PointCalc migration prompt */}
+        {isFirstTime && onImportPC && !showPCGuide && (
+          <button
+            onClick={() => setShowPCGuide(true)}
+            className="w-full rounded-2xl p-4 mb-6 text-left press-scale transition-all"
+            style={{ background: "linear-gradient(135deg, rgba(34,197,94,0.1), rgba(34,197,94,0.05))", border: "1px solid rgba(34,197,94,0.25)" }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl shrink-0 flex items-center justify-center" style={{ background: "rgba(34,197,94,0.15)" }}>
+                <span className="text-lg">📱</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">Switching from PointCalc?</p>
+                <p className="text-xs mt-0.5" style={{ color: "rgba(74,222,128,0.6)" }}>Import your tournaments in seconds</p>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0" style={{ color: "rgba(74,222,128,0.5)" }} />
+            </div>
+          </button>
+        )}
+
+        {/* PointCalc migration guide (expanded) */}
+        {isFirstTime && showPCGuide && onImportPC && (
+          <div className="rounded-2xl p-5 mb-6" style={{ background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.2)" }}>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-base">📱</span>
+              <p className="text-sm font-bold text-white">Import from PointCalc</p>
+              <button onClick={() => setShowPCGuide(false)} className="ml-auto p-1 rounded-lg" style={{ color: "rgba(196,181,253,0.4)" }}>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="space-y-3 mb-5">
+              {[
+                { step: "1", text: "Open PointCalc on your phone" },
+                { step: "2", text: "Go to your tournament → tap Share / Export" },
+                { step: "3", text: "Save or send the .pc file to this device" },
+                { step: "4", text: "Tap the button below to pick the file" },
+              ].map((item) => (
+                <div key={item.step} className="flex items-start gap-3">
+                  <span className="h-5 w-5 rounded-full shrink-0 flex items-center justify-center text-[10px] font-black" style={{ background: "rgba(34,197,94,0.2)", color: "#4ade80" }}>{item.step}</span>
+                  <p className="text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.7)" }}>{item.text}</p>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm text-white press-scale"
+              style={{ background: "linear-gradient(135deg, #16a34a, #22c55e)" }}
+            >
+              <Upload className="h-4 w-4" />
+              Choose .pc File
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pc,.PC"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onImportPC(file);
+                e.target.value = "";
+              }}
+            />
+          </div>
+        )}
+
         <div className="flex items-center gap-3 px-4 py-3.5 rounded-2xl mb-5" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
           <Flag className="h-4 w-4 shrink-0" style={{ color: "rgba(196,181,253,0.55)" }} />
           <input
-            autoFocus
+            autoFocus={!isFirstTime || !onImportPC}
             value={createName}
             onChange={(e) => setCreateName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && createName.trim()) onCreate(); }}
@@ -61,8 +128,8 @@ export default function CreateScreen({
           </button>
         </div>
 
-        {/* Import from PointCalc */}
-        {onImportPC && (
+        {/* Import from PointCalc (for returning users) */}
+        {!isFirstTime && onImportPC && (
           <>
             <div className="flex items-center gap-3 mb-3">
               <div className="flex-1 border-t" style={{ borderColor: "rgba(255,255,255,0.12)", borderStyle: "dashed" }} />

@@ -78,6 +78,11 @@ export default function AddTeamsScreen({
             <X className="h-4 w-4" />
           </button>
         )}
+        {addScreenMode === "create" && isPendingClone && onCancelClone && (
+          <button onClick={onCancelClone} className="absolute right-4 top-12 p-2 rounded-xl" style={{ background:"rgba(255,255,255,0.07)", color:"rgba(196,181,253,0.6)" }}>
+            <X className="h-4 w-4" />
+          </button>
+        )}
         <h1 className="text-2xl text-white" style={{ fontFamily:"'Dancing Script',cursive", fontWeight:700 }}>
           {tournament.name}
         </h1>
