@@ -531,7 +531,7 @@ export default function AddTeamsScreen({
               className="flex-1 py-4 rounded-2xl font-bold text-white text-sm flex items-center justify-center gap-2 press-scale"
               style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)", boxShadow: "0 4px 28px rgba(124,58,237,0.5)" }}
             >
-              <Trophy className="h-4 w-4" /> Clone
+              <Trophy className="h-4 w-4" /> {clonedFromId ? "Clone" : "Import"}
             </button>
           </div>
         ) : (
