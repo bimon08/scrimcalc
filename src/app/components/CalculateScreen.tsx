@@ -148,10 +148,17 @@ export default function CalculateScreen({
         formData.append("images", prepared, `screenshot_${i + 1}.jpg`);
       }
 
+      // 5 min timeout to match server maxDuration — prevents browser from killing the connection
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+
       const res = await fetch("/api/ocr", {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeout);
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -173,7 +180,10 @@ export default function CalculateScreen({
         throw new Error("No data in response");
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "OCR failed";
+      const isTimeout = err instanceof DOMException && err.name === "AbortError";
+      const msg = isTimeout
+        ? "Request timed out — try uploading fewer screenshots"
+        : err instanceof Error ? err.message : "OCR failed";
       setOcrError(msg);
       toast.error(msg);
     } finally {
