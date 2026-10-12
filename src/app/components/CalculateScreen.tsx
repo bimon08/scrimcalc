@@ -226,7 +226,17 @@ export default function CalculateScreen({
                   : { color: "rgba(52,211,153,0.5)" }
                 }
               >
-                <Camera className="h-3.5 w-3.5" /> Auto Scan
+                <Camera className="h-3.5 w-3.5" />
+                <span>Auto Scan</span>
+                <span
+                  className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wider leading-none"
+                  style={calcTab === "auto"
+                    ? { background: "rgba(0,0,0,0.25)", color: "#d1fae5" }
+                    : { background: "rgba(16,185,129,0.15)", color: "rgba(52,211,153,0.7)" }
+                  }
+                >
+                  Beta
+                </span>
               </button>
               <button
                 onClick={() => setCalcTab("manual")}
@@ -282,7 +292,10 @@ export default function CalculateScreen({
                     <Camera className="h-4 w-4 text-emerald-400" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-white">Upload Screenshots</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-bold text-white">Upload Screenshots</p>
+                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wider leading-none bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">Beta</span>
+                    </div>
                     <p className="text-[10px]" style={{ color: "rgba(52,211,153,0.6)" }}>AI reads your scoreboards instantly</p>
                   </div>
                 </div>
