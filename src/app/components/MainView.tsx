@@ -107,7 +107,7 @@ export default function MainView({
             </div>
 
             {/* Compact Plan Badge */}
-            {sub && !sub.isAdmin && sub.daysLeft !== null && sub.daysLeft > 0 && (sub.isTrial || sub.daysLeft <= 5) && (() => {
+            {sub && !sub.isAdmin && sub.isActive && sub.daysLeft !== null && (sub.daysLeft > 0 || sub.hoursLeft !== null) && (sub.isTrial || sub.daysLeft <= 5) && (() => {
               const urgent = sub.daysLeft <= 2;
               const warning = sub.daysLeft <= 5;
               const bg = urgent ? "rgba(239,68,68,0.14)" : warning ? "rgba(251,146,60,0.12)" : "rgba(124,58,237,0.12)";
@@ -115,9 +115,12 @@ export default function MainView({
               const color = urgent ? "#fca5a5" : warning ? "#fdba74" : "#c4b5fd";
               const btnBg = urgent ? "rgba(239,68,68,0.3)" : warning ? "rgba(251,146,60,0.25)" : "rgba(124,58,237,0.25)";
               const icon = urgent ? "⚠️" : "⏳";
+              const timeStr = sub.daysLeft === 0
+                ? `${sub.hoursLeft ?? 0}h`
+                : `${sub.daysLeft}d`;
               const label = sub.isTrial
-                ? `${sub.daysLeft}d trial`
-                : `${sub.daysLeft}d left`;
+                ? `${timeStr} trial`
+                : `${timeStr} left`;
               return (
                 <div
                   className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-semibold shrink-0"

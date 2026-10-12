@@ -9,8 +9,10 @@ export interface SubscriptionInfo {
   isAdmin: boolean;
   /** Whether the user is signed in */
   isLoggedIn: boolean;
-  /** Days remaining (-ve if expired) */
+  /** Days remaining (whole days, 0 when <24h left) */
   daysLeft: number | null;
+  /** Hours remaining (only meaningful when daysLeft === 0 and still active) */
+  hoursLeft: number | null;
   /** Whether the user is on a free trial */
   isTrial: boolean;
   /** Pending plan days (admin-assigned, waiting for user to activate) */
@@ -42,23 +44,28 @@ export function useSubscription(): SubscriptionInfo {
 
   let isActive = true;
   let daysLeft: number | null = null;
+  let hoursLeft: number | null = null;
 
   if (!isAdmin && subEnd) {
     const end = new Date(subEnd);
     const now = new Date();
-    daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    isActive = daysLeft > 0;
+    const msLeft = end.getTime() - now.getTime();
+    isActive = msLeft > 0;
+    daysLeft = Math.floor(msLeft / (1000 * 60 * 60 * 24));
+    hoursLeft = Math.max(0, Math.floor((msLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
   } else if (!isAdmin && !subEnd) {
     // No subscription end set and not admin = expired (edge case)
     // But if they have a pending plan, show activation instead
     isActive = false;
     daysLeft = 0;
+    hoursLeft = 0;
   }
 
   // Admin always active
   if (isAdmin) {
     isActive = true;
     daysLeft = null;
+    hoursLeft = null;
   }
 
   const guard = useCallback(<T extends unknown[]>(fn: (...args: T) => void) => {
@@ -72,7 +79,7 @@ export function useSubscription(): SubscriptionInfo {
   }, [isAdmin, isActive]);
 
   return {
-    isActive, isAdmin, isLoggedIn, daysLeft, isTrial,
+    isActive, isAdmin, isLoggedIn, daysLeft, hoursLeft, isTrial,
     pendingPlanDays,
     showNudge, setShowNudge,
     showActivation, setShowActivation,

@@ -51,7 +51,7 @@ export default function ProfilePage() {
   } else if (subEnd) {
     const end = new Date(subEnd);
     const msLeft = end.getTime() - Date.now();
-    daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+    daysLeft = Math.floor(msLeft / (1000 * 60 * 60 * 24));
     if (msLeft > 0) {
       const totalMins = Math.floor(msLeft / (1000 * 60));
       const d = Math.floor(totalMins / (60 * 24));

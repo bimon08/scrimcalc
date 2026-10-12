@@ -93,8 +93,14 @@ export default function AdminPage() {
     if (u.pendingPlanDays) return { label: `Pending ${u.pendingPlanDays}d`, color: "#60a5fa", active: false };
     if (!u.subscriptionEnd) return { label: "No sub", color: "#6b7280", active: false };
     const end = new Date(u.subscriptionEnd);
-    const days = Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    if (days > 0) return { label: `${days}d left`, color: days <= 3 ? "#f97316" : "#4ade80", active: true };
+    const msLeft = end.getTime() - Date.now();
+    const days = Math.floor(msLeft / (1000 * 60 * 60 * 24));
+    if (msLeft > 0) {
+      const displayLabel = days > 0
+        ? `${days}d left`
+        : `${Math.floor((msLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))}h left`;
+      return { label: displayLabel, color: days <= 3 ? "#f97316" : "#4ade80", active: true };
+    }
     return { label: "Expired", color: "#ef4444", active: false };
   };
 
