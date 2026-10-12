@@ -26,13 +26,20 @@ export async function POST(req: Request) {
   const session = await getAuth();
   const userEmail = session?.user?.email ?? "unknown";
 
-  const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
-  if (!apiKey) {
+  // Support multiple API keys (comma-separated) for rotation on rate limits
+  const apiKeys = (process.env.GEMINI_API_KEYS || process.env.GOOGLE_GEMINI_API_KEY || "")
+    .split(",")
+    .map(k => k.trim())
+    .filter(Boolean);
+
+  if (apiKeys.length === 0) {
     return NextResponse.json(
       { error: "Gemini API key not configured" },
       { status: 500 },
     );
   }
+
+  console.log(`OCR: ${apiKeys.length} API key(s) available for rotation`);
 
   try {
     const formData = await req.formData();
@@ -63,47 +70,44 @@ export async function POST(req: Request) {
     ];
 
     const startTime = Date.now();
-    const BATCH_SIZE = 8; // 8 images per call — fewer API calls = less rate limiting
 
-    // Split images into batches
-    const batches: File[][] = [];
-    for (let i = 0; i < imageFiles.length; i += BATCH_SIZE) {
-      batches.push(imageFiles.slice(i, i + BATCH_SIZE));
-    }
+    // Convert all images to base64 once
+    const imageParts = await Promise.all(
+      imageFiles.map(async (file) => {
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const base64 = buffer.toString("base64");
+        return { inline_data: { mime_type: file.type || "image/jpeg", data: base64 } };
+      }),
+    );
 
-    console.log(`Processing ${imageFiles.length} images in ${batches.length} batch(es) of up to ${BATCH_SIZE}`);
+    const requestBody = JSON.stringify({
+      contents: [{ parts: [{ text: prompt }, ...imageParts] }],
+      generationConfig: { temperature: 0, maxOutputTokens: 65536 },
+    });
+
+    console.log(`Processing ${imageFiles.length} images in single API call`);
 
     /** Delay helper */
     const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-    /** Process a single batch with retry logic */
-    const processBatch = async (batch: File[], batchIdx: number) => {
-      const imageParts = await Promise.all(
-        batch.map(async (file) => {
-          const buffer = Buffer.from(await file.arrayBuffer());
-          const base64 = buffer.toString("base64");
-          return { inline_data: { mime_type: file.type || "image/jpeg", data: base64 } };
-        }),
-      );
+    // Try all combinations: key × model × retries
+    let geminiResponse: Response | null = null;
+    let usedModel = models[0];
+    let usedKeyIdx = 0;
 
-      const requestBody = JSON.stringify({
-        contents: [{ parts: [{ text: prompt }, ...imageParts] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 65536 },
-      });
-
-      let geminiResponse: Response | null = null;
-      let usedModel = models[0];
+    outer:
+    for (let keyIdx = 0; keyIdx < apiKeys.length; keyIdx++) {
+      const currentKey = apiKeys[keyIdx];
 
       for (const model of models) {
-        // Retry each model up to 3 times with backoff for 503
         for (let attempt = 0; attempt < 3; attempt++) {
           if (attempt > 0) {
             const waitMs = 2000 * attempt; // 2s, 4s backoff
-            console.log(`Batch ${batchIdx + 1}: Retrying ${model} in ${waitMs}ms (attempt ${attempt + 1})...`);
+            console.log(`Key ${keyIdx + 1}: Retrying ${model} in ${waitMs}ms (attempt ${attempt + 1})...`);
             await delay(waitMs);
           }
 
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
           const res = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -113,11 +117,12 @@ export async function POST(req: Request) {
           if (res.ok) {
             geminiResponse = res;
             usedModel = model;
-            break;
+            usedKeyIdx = keyIdx;
+            break outer;
           }
 
           if (res.status === 503 || res.status === 429) {
-            console.warn(`Batch ${batchIdx + 1}: ${model} rate-limited (${res.status}), attempt ${attempt + 1}/3`);
+            console.warn(`Key ${keyIdx + 1}: ${model} rate-limited (${res.status}), attempt ${attempt + 1}/3`);
             continue; // Retry same model
           }
 
@@ -125,68 +130,53 @@ export async function POST(req: Request) {
             break; // Model deprecated, try next model
           }
 
+          // If this key is invalid (401/403), skip to next key
+          if (res.status === 401 || res.status === 403) {
+            console.warn(`Key ${keyIdx + 1}: Invalid or forbidden, trying next key...`);
+            break; // break model loop too
+          }
+
           const errBody = await res.text();
-          throw new Error(`Batch ${batchIdx + 1}: API error ${res.status} — ${errBody.slice(0, 200)}`);
+          throw new Error(`API error ${res.status} — ${errBody.slice(0, 200)}`);
         }
 
-        if (geminiResponse) break; // Got a response, stop trying models
+        if (geminiResponse) break;
       }
+    }
 
-      if (!geminiResponse) {
-        throw new Error(`Batch ${batchIdx + 1}: All Gemini models unavailable after retries`);
-      }
+    if (!geminiResponse) {
+      throw new Error(`All ${apiKeys.length} API key(s) × ${models.length} models exhausted after retries`);
+    }
 
-      const geminiResult = await geminiResponse.json();
-      const textContent = geminiResult?.candidates?.[0]?.content?.parts?.[0]?.text;
-      const usageMetadata = geminiResult?.usageMetadata;
-      const inputTokens = usageMetadata?.promptTokenCount ?? 0;
-      const outputTokens = usageMetadata?.candidatesTokenCount ?? 0;
+    console.log(`Success with key ${usedKeyIdx + 1}, model ${usedModel}`);
 
-      if (!textContent) {
-        throw new Error(`Batch ${batchIdx + 1}: No response text from Gemini`);
-      }
+    const geminiResult = await geminiResponse.json();
+    const textContent = geminiResult?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const usageMetadata = geminiResult?.usageMetadata;
+    const inputTokens = usageMetadata?.promptTokenCount ?? 0;
+    const outputTokens = usageMetadata?.candidatesTokenCount ?? 0;
 
-      console.log(`Batch ${batchIdx + 1}/${batches.length} done with ${usedModel} (${batch.length} imgs)`);
+    if (!textContent) {
+      throw new Error("No response text from Gemini");
+    }
 
-      const jsonStr = extractJson(textContent);
-      let parsed;
-      try {
-        parsed = JSON.parse(jsonStr);
-      } catch {
-        // Gemini may return truncated JSON — try to repair it
-        const repaired = repairJson(jsonStr);
-        parsed = JSON.parse(repaired);
-        console.log(`Batch ${batchIdx + 1}: JSON was truncated, auto-repaired`);
-      }
-      return { data: parsed, inputTokens, outputTokens, model: usedModel };
-    };
-
-    // Process batches sequentially to avoid free-tier rate limits
-    const batchResults: Array<{ data: Record<string, unknown>; inputTokens: number; outputTokens: number; model: string }> = [];
-
-    for (let i = 0; i < batches.length; i++) {
-      const result = await processBatch(batches[i], i);
-      batchResults.push(result);
+    const jsonStr = extractJson(textContent);
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      const repaired = repairJson(jsonStr);
+      parsed = JSON.parse(repaired);
+      console.log("JSON was truncated, auto-repaired");
     }
 
     const durationMs = Date.now() - startTime;
-
-    // Merge batch results
-    const mergedData = batchResults.length === 1
-      ? batchResults[0].data
-      : mergeBatchResults(batchResults.map((r) => r.data));
-
-    // Sum up token usage across all batches
-    const totalInputTokens = batchResults.reduce((sum, r) => sum + r.inputTokens, 0);
-    const totalOutputTokens = batchResults.reduce((sum, r) => sum + r.outputTokens, 0);
-    const usedModel = batchResults[batchResults.length - 1]?.model ?? "unknown";
-
-    console.log(`OCR completed: ${batches.length} batches, ${imageFiles.length} images, ${durationMs}ms`);
+    console.log(`OCR completed: ${imageFiles.length} images, ${durationMs}ms, key ${usedKeyIdx + 1}, model ${usedModel}`);
 
     // Log successful API call
-    await logApiUsage(caller.userId, userEmail, usedModel, imageFiles.length, totalInputTokens, totalOutputTokens, durationMs, "success");
+    await logApiUsage(caller.userId, userEmail, usedModel, imageFiles.length, inputTokens, outputTokens, durationMs, "success");
 
-    return NextResponse.json({ data: mergedData });
+    return NextResponse.json({ data: parsed });
   } catch (err: unknown) {
     console.error("OCR route error:", err);
     const message =
