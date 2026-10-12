@@ -60,19 +60,23 @@ export default function CalculateScreen({
   });
 
   // ── OCR upload handlers ──
+  const MAX_SCREENSHOTS = 40;
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    const newFiles = [...uploadFiles, ...files];
+    let newFiles = [...uploadFiles, ...files];
+    if (newFiles.length > MAX_SCREENSHOTS) {
+      toast.error(`Max ${MAX_SCREENSHOTS} screenshots allowed`);
+      newFiles = newFiles.slice(0, MAX_SCREENSHOTS);
+    }
     setUploadFiles(newFiles);
-    // Generate previews
     const newPreviews = [...uploadPreviews];
-    files.forEach((f) => {
+    files.slice(0, MAX_SCREENSHOTS - uploadFiles.length).forEach((f) => {
       newPreviews.push(URL.createObjectURL(f));
     });
-    setUploadPreviews(newPreviews);
+    setUploadPreviews(newPreviews.slice(0, MAX_SCREENSHOTS));
     setOcrError(null);
-    // Reset the input so the same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -107,20 +111,19 @@ export default function CalculateScreen({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [previewModalIndex, uploadPreviews.length]);
 
-  // Prepare image: keep originals under 4MB, compress larger ones
+  // Prepare image: resize to 1920px max width for fast upload + accurate OCR
   const prepareImage = async (file: File): Promise<Blob> => {
-    if (file.size <= 4 * 1024 * 1024) return file; // Keep crisp original
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const scale = Math.min(1, 2560 / img.width);
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
+        const scale = Math.min(1, 1920 / img.width);
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
         const ctx = canvas.getContext("2d")!;
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob((blob) => resolve(blob!), "image/jpeg", 0.95);
+        canvas.toBlob((blob) => resolve(blob!), "image/jpeg", 0.9);
       };
       img.src = URL.createObjectURL(file);
     });

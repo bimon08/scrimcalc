@@ -71,44 +71,23 @@ export async function POST(req: Request) {
       batches.push(imageFiles.slice(i, i + BATCH_SIZE));
     }
 
-    console.log(`Processing ${imageFiles.length} images in ${batches.length} batch(es) of up to ${BATCH_SIZE}`);
+    console.log(`Processing ${imageFiles.length} images in ${batches.length} batch(es) of up to ${BATCH_SIZE} — parallel`);
 
-    // Process each batch
-    const batchResults: Array<{ data: Record<string, unknown>; inputTokens: number; outputTokens: number; model: string }> = [];
-
-    for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
-      const batch = batches[batchIdx];
-
-      // Convert batch images to base64
+    /** Process a single batch: convert to base64, call Gemini with model fallback */
+    const processBatch = async (batch: File[], batchIdx: number) => {
       const imageParts = await Promise.all(
         batch.map(async (file) => {
           const buffer = Buffer.from(await file.arrayBuffer());
           const base64 = buffer.toString("base64");
-          return {
-            inline_data: {
-              mime_type: file.type || "image/png",
-              data: base64,
-            },
-          };
+          return { inline_data: { mime_type: file.type || "image/jpeg", data: base64 } };
         }),
       );
 
       const requestBody = JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              ...imageParts,
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 16384,
-        },
+        contents: [{ parts: [{ text: prompt }, ...imageParts] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 16384 },
       });
 
-      // Try models in order for this batch
       let geminiResponse: Response | null = null;
       let usedModel = models[0];
 
@@ -132,20 +111,11 @@ export async function POST(req: Request) {
         }
 
         const errBody = await res.text();
-        console.error(`Batch ${batchIdx + 1}: Gemini API error:`, res.status, errBody);
-        await logApiUsage(caller.userId, userEmail, model, batch.length, 0, 0, Date.now() - startTime, "error", `Batch ${batchIdx + 1} API error ${res.status}`);
-        return NextResponse.json(
-          { error: `Gemini API error: ${res.status}`, details: errBody },
-          { status: 502 },
-        );
+        throw new Error(`Batch ${batchIdx + 1}: API error ${res.status} — ${errBody.slice(0, 200)}`);
       }
 
       if (!geminiResponse) {
-        await logApiUsage(caller.userId, userEmail, "none", batch.length, 0, 0, Date.now() - startTime, "error", `Batch ${batchIdx + 1}: All models unavailable`);
-        return NextResponse.json(
-          { error: "All Gemini models unavailable. Try again later." },
-          { status: 502 },
-        );
+        throw new Error(`Batch ${batchIdx + 1}: All Gemini models unavailable`);
       }
 
       const geminiResult = await geminiResponse.json();
@@ -155,19 +125,20 @@ export async function POST(req: Request) {
       const outputTokens = usageMetadata?.candidatesTokenCount ?? 0;
 
       if (!textContent) {
-        await logApiUsage(caller.userId, userEmail, usedModel, batch.length, inputTokens, outputTokens, Date.now() - startTime, "error", `Batch ${batchIdx + 1}: No response text`);
-        return NextResponse.json(
-          { error: `Batch ${batchIdx + 1}: No response from Gemini` },
-          { status: 502 },
-        );
+        throw new Error(`Batch ${batchIdx + 1}: No response text from Gemini`);
       }
 
-      console.log(`Batch ${batchIdx + 1}/${batches.length} completed with ${usedModel} (${batch.length} images)`);
+      console.log(`Batch ${batchIdx + 1}/${batches.length} done with ${usedModel} (${batch.length} imgs)`);
 
       const jsonStr = extractJson(textContent);
       const parsed = JSON.parse(jsonStr);
-      batchResults.push({ data: parsed, inputTokens, outputTokens, model: usedModel });
-    }
+      return { data: parsed, inputTokens, outputTokens, model: usedModel };
+    };
+
+    // Run ALL batches in parallel
+    const batchResults = await Promise.all(
+      batches.map((batch, idx) => processBatch(batch, idx)),
+    );
 
     const durationMs = Date.now() - startTime;
 
