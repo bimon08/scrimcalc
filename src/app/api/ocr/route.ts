@@ -71,9 +71,12 @@ export async function POST(req: Request) {
       batches.push(imageFiles.slice(i, i + BATCH_SIZE));
     }
 
-    console.log(`Processing ${imageFiles.length} images in ${batches.length} batch(es) of up to ${BATCH_SIZE} — parallel`);
+    console.log(`Processing ${imageFiles.length} images in ${batches.length} batch(es) of up to ${BATCH_SIZE}`);
 
-    /** Process a single batch: convert to base64, call Gemini with model fallback */
+    /** Delay helper */
+    const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    /** Process a single batch with retry logic */
     const processBatch = async (batch: File[], batchIdx: number) => {
       const imageParts = await Promise.all(
         batch.map(async (file) => {
@@ -92,30 +95,45 @@ export async function POST(req: Request) {
       let usedModel = models[0];
 
       for (const model of models) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: requestBody,
-        });
+        // Retry each model up to 3 times with backoff for 503
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (attempt > 0) {
+            const waitMs = 2000 * attempt; // 2s, 4s backoff
+            console.log(`Batch ${batchIdx + 1}: Retrying ${model} in ${waitMs}ms (attempt ${attempt + 1})...`);
+            await delay(waitMs);
+          }
 
-        if (res.ok) {
-          geminiResponse = res;
-          usedModel = model;
-          break;
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: requestBody,
+          });
+
+          if (res.ok) {
+            geminiResponse = res;
+            usedModel = model;
+            break;
+          }
+
+          if (res.status === 503 || res.status === 429) {
+            console.warn(`Batch ${batchIdx + 1}: ${model} rate-limited (${res.status}), attempt ${attempt + 1}/3`);
+            continue; // Retry same model
+          }
+
+          if (res.status === 404) {
+            break; // Model deprecated, try next model
+          }
+
+          const errBody = await res.text();
+          throw new Error(`Batch ${batchIdx + 1}: API error ${res.status} — ${errBody.slice(0, 200)}`);
         }
 
-        if (res.status === 404 || res.status === 503) {
-          console.warn(`Batch ${batchIdx + 1}: Model ${model} unavailable (${res.status}), trying next...`);
-          continue;
-        }
-
-        const errBody = await res.text();
-        throw new Error(`Batch ${batchIdx + 1}: API error ${res.status} — ${errBody.slice(0, 200)}`);
+        if (geminiResponse) break; // Got a response, stop trying models
       }
 
       if (!geminiResponse) {
-        throw new Error(`Batch ${batchIdx + 1}: All Gemini models unavailable`);
+        throw new Error(`Batch ${batchIdx + 1}: All Gemini models unavailable after retries`);
       }
 
       const geminiResult = await geminiResponse.json();
@@ -135,10 +153,17 @@ export async function POST(req: Request) {
       return { data: parsed, inputTokens, outputTokens, model: usedModel };
     };
 
-    // Run ALL batches in parallel
-    const batchResults = await Promise.all(
-      batches.map((batch, idx) => processBatch(batch, idx)),
-    );
+    // Process batches with limited concurrency (2 at a time to avoid rate limits)
+    const CONCURRENCY = 2;
+    const batchResults: Array<{ data: Record<string, unknown>; inputTokens: number; outputTokens: number; model: string }> = [];
+
+    for (let i = 0; i < batches.length; i += CONCURRENCY) {
+      const chunk = batches.slice(i, i + CONCURRENCY);
+      const chunkResults = await Promise.all(
+        chunk.map((batch, idx) => processBatch(batch, i + idx)),
+      );
+      batchResults.push(...chunkResults);
+    }
 
     const durationMs = Date.now() - startTime;
 
