@@ -2,8 +2,129 @@
 import { useState, useRef, useEffect } from "react";
 import { Trash2, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ClipboardPaste, Trophy, Upload, Camera, Loader2, ImageIcon, X as XIcon, Eye, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { Tournament, AssignedGroup, StandingRow, DEFAULT_BGMI_POINTS } from "@/lib/types";
+import { Tournament, AssignedGroup, StandingRow, DEFAULT_BGMI_POINTS, Team } from "@/lib/types";
 import GroupFilterDropdown from "./GroupFilterDropdown";
+
+// ── Client-side OCR helpers (replicate server logic for direct browser → Gemini calls) ──
+
+/** Build the Gemini prompt for direct OCR (all images in one call) */
+function buildDirectPrompt(teams: Team[]): string {
+  const hasTeams = teams.length > 0;
+
+  const rosterSection = hasTeams
+    ? `\nREGISTERED TEAMS (${teams.length}):\n${teams
+    .map((t, i) => {
+      const playerList =
+        t.players && t.players.length > 0
+          ? ` — Players: ${t.players.join(", ")}`
+          : "";
+      return `${i + 1}. ${t.name}${playerList}`;
+    })
+    .join("\n")}\n`
+    : "";
+
+  return `Extract BGMI scoreboard stats from the screenshots provided.
+${rosterSection}
+BGMI SCOREBOARD LAYOUT:
+- LEFT PANEL: #1 (crown icon) and #2 (silver icon) teams — each shows player rows: "[Name] ... [N finishes]"
+- RIGHT PANEL: Positions #3–#14 in separate blocks, each block has a position header + player rows
+- Each player row: "[PlayerName]    [N finishes]" — the digit BEFORE the word "finishes" is their KILL COUNT
+- Players in the same position block = teammates (max 4 per squad)
+- Multiple screenshots per match (scrollable view). Same #1 and #2 teams = same match.
+- Read ALL position blocks visible, including partially visible ones at screen edges.
+
+DIGIT READING — CRITICAL:
+- Zoom into each "N finishes" text mentally. The digit is small but distinct:
+  • "1 finishes" has a single vertical stroke with a small top serif — do NOT confuse with "0" (round/oval shape)
+  • "3 finishes" has two curved bumps on the right — do NOT confuse with "2" (flat bottom horizontal stroke)
+  • "0 finishes" is a closed oval/circle — only output 0 if you clearly see the oval
+- If a digit is ambiguous between 0 and 1, lean toward 1 (1-kill is far more common than 0-kill for a visible player)
+- NEVER default any kill count to 0. Read each one individually.
+
+PLAYER NAME MATCHING:
+- If a registered team roster is provided above, match each in-game name to the closest registered player
+- In-game names often differ slightly from registered names (extra symbols, case changes, Unicode variants)
+- Use the EXACT in-game name as shown on screen in the output (do not substitute the registered name)
+
+TASK:
+1. Group images by match (same #1/#2 = same match). Label M1, M2, M3…
+2. For each match, read EVERY position block: position number, exact player names (preserve Unicode/symbols), and kill counts
+3. Match players to registered teams. Unmatched players → use group letters A, B, C…
+4. NEVER merge two position blocks into one group. Each position block = exactly one group.
+5. Do NOT calculate points. Only output positions and kills.
+6. VERIFICATION: After extracting all data, re-read each kill count digit one more time.
+
+OUTPUT FORMAT — CRITICAL RULES:
+- Wrap the JSON in a \\\`\\\`\\\`json code block
+- Output COMPACT/MINIFIED JSON on a single line (no indentation, no newlines inside the JSON)
+- The ENTIRE JSON must be complete and valid — never stop mid-way
+- Do NOT write anything after the closing \\\`\\\`\\\` of the code block — no summary, no explanation, nothing
+
+Example output format:
+\\\`\\\`\\\`json
+{"matches_detected":4,"groups":[{"group":"TeamName","players":["Player1","Player2"],"matches":[{"match":1,"position":1,"playerKills":{"Player1":5,"Player2":3}}]}]}
+\\\`\\\`\\\`
+
+RULES:
+- One position block = one group entry. Never combine blocks.
+- Player names EXACTLY as on screen — preserve all Unicode, CJK, special chars, superscripts, subscripts
+- "players" = union of all unique players seen across ALL matches for that group
+- Skip matches where a team doesn't appear at all`;
+}
+
+/** Extract JSON from Gemini response text */
+function extractJsonFromText(text: string): string {
+  const fenced = text.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+  if (fenced) return fenced[1].trim();
+  const braceStart = text.indexOf("{");
+  const braceEnd = text.lastIndexOf("}");
+  if (braceStart !== -1 && braceEnd > braceStart)
+    return text.slice(braceStart, braceEnd + 1);
+  return text.trim();
+}
+
+/** Repair truncated/malformed JSON — close unclosed brackets, fix trailing commas */
+function repairTruncatedJson(jsonStr: string): string {
+  let s = jsonStr.trim();
+
+  while (s.length > 0) {
+    const last = s[s.length - 1];
+    if (last === '}' || last === ']' || last === '"' || last === 'e' || last === 'l' || /\d/.test(last)) break;
+    s = s.slice(0, -1);
+  }
+
+  s = s.replace(/,\s*([\]}])/g, '$1');
+
+  try { JSON.parse(s); return s; } catch { /* needs more repair */ }
+
+  const stack: string[] = [];
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') stack.push('}');
+    else if (ch === '[') stack.push(']');
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+
+  if (inString) s += '"';
+  s = s.replace(/,\s*$/, '');
+  s = s.replace(/:\s*$/, ': null');
+  s = s.replace(/,\s*([\]}])/g, '$1');
+
+  while (stack.length > 0) {
+    const closer = stack.pop()!;
+    s = s.replace(/,\s*$/, '');
+    s += closer;
+  }
+
+  return s;
+}
 
 interface Props {
   tournament: Tournament;
@@ -138,55 +259,122 @@ export default function CalculateScreen({
     setIsProcessing(true);
     setOcrError(null);
 
+    const startTime = Date.now();
+
     try {
-      const formData = new FormData();
-      const activeTeams = tournament.teams.filter((t) => !t.out);
-      formData.append("teams", JSON.stringify(activeTeams));
-
-      // Compress images based on batch size to avoid payload limits
-      for (let i = 0; i < uploadFiles.length; i++) {
-        const prepared = await prepareImage(uploadFiles[i]);
-        formData.append("images", prepared, `screenshot_${i + 1}.jpg`);
+      // 1. Get API key from server (only returned to authenticated users)
+      const configRes = await fetch("/api/ocr/config");
+      if (!configRes.ok) {
+        const body = await configRes.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to get OCR config");
       }
+      const { key, models } = await configRes.json() as { key: string; models: string[] };
 
-      // 5 min timeout to match server maxDuration — prevents browser from killing the connection
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+      // 2. Build the prompt
+      const activeTeams = tournament.teams.filter((t) => !t.out);
+      const prompt = buildDirectPrompt(activeTeams);
 
-      const res = await fetch("/api/ocr", {
-        method: "POST",
-        body: formData,
-        signal: controller.signal,
+      // 3. Convert images to base64
+      const imageParts = await Promise.all(
+        uploadFiles.map(async (file) => {
+          const prepared = await prepareImage(file);
+          const arrayBuffer = await prepared.arrayBuffer();
+          const base64 = btoa(
+            new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+          );
+          return { inline_data: { mime_type: "image/jpeg", data: base64 } };
+        })
+      );
+
+      const requestBody = JSON.stringify({
+        contents: [{ parts: [{ text: prompt }, ...imageParts] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 65536 },
       });
 
-      clearTimeout(timeout);
+      // 4. Call Gemini directly from browser (uses user's residential IP, not Vercel's)
+      let geminiResult: Record<string, unknown> | null = null;
+      let usedModel = models[0];
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const detail = body.details ? `\n${body.details}` : "";
-        throw new Error((body.error || `Server error ${res.status}`) + detail);
+      for (const model of models) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 2000 * attempt));
+
+          try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+            const res = await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: requestBody,
+            });
+
+            if (res.ok) {
+              geminiResult = await res.json();
+              usedModel = model;
+              break;
+            }
+
+            if (res.status === 503 || res.status === 429) continue; // retry
+            if (res.status === 404) break; // model deprecated, try next
+            if (res.status === 400 || res.status === 401 || res.status === 403) break; // bad key, try next model
+
+            const errBody = await res.text();
+            throw new Error(`API error ${res.status} — ${errBody.slice(0, 200)}`);
+          } catch (fetchErr) {
+            if (attempt === 2) throw fetchErr;
+          }
+        }
+        if (geminiResult) break;
       }
 
-      const result = await res.json();
-      if (result.data) {
-        // Auto-apply the OCR result immediately
-        const jsonStr = JSON.stringify(result.data, null, 2);
-        if (onOcrResult) onOcrResult(jsonStr);
-        // Clean up upload state
-        uploadPreviews.forEach((p) => URL.revokeObjectURL(p));
-        setUploadFiles([]);
-        setUploadPreviews([]);
-        setShowAddMatches(false);
-      } else {
-        throw new Error("No data in response");
+      if (!geminiResult) {
+        throw new Error("All API models exhausted — please try again");
       }
+
+      // 5. Parse response
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const textContent = (geminiResult as any)?.candidates?.[0]?.content?.parts?.[0]?.text;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const usageMetadata = (geminiResult as any)?.usageMetadata;
+      const inputTokens = usageMetadata?.promptTokenCount ?? 0;
+      const outputTokens = usageMetadata?.candidatesTokenCount ?? 0;
+
+      if (!textContent) throw new Error("No response text from Gemini");
+
+      const jsonStr = extractJsonFromText(textContent);
+      let parsed;
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch {
+        const repaired = repairTruncatedJson(jsonStr);
+        parsed = JSON.parse(repaired);
+      }
+
+      const durationMs = Date.now() - startTime;
+
+      // 6. Log usage (fire-and-forget)
+      fetch("/api/ocr/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: usedModel, imageCount: uploadFiles.length, inputTokens, outputTokens, durationMs, status: "success" }),
+      }).catch(() => {});
+
+      // 7. Apply result
+      if (onOcrResult) onOcrResult(JSON.stringify(parsed, null, 2));
+      uploadPreviews.forEach((p) => URL.revokeObjectURL(p));
+      setUploadFiles([]);
+      setUploadPreviews([]);
+      setShowAddMatches(false);
     } catch (err: unknown) {
-      const isTimeout = err instanceof DOMException && err.name === "AbortError";
-      const msg = isTimeout
-        ? "Request timed out — try uploading fewer screenshots"
-        : err instanceof Error ? err.message : "OCR failed";
+      const msg = err instanceof Error ? err.message : "OCR failed";
       setOcrError(msg);
       toast.error(msg);
+
+      // Log failure
+      fetch("/api/ocr/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "unknown", imageCount: uploadFiles.length, inputTokens: 0, outputTokens: 0, durationMs: Date.now() - startTime, status: "error", errorMessage: msg }),
+      }).catch(() => {});
     } finally {
       setIsProcessing(false);
     }
