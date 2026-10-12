@@ -60,10 +60,57 @@ export default function StatsPage() {
     }
   };
 
+  const extractJson = (text: string): string => {
+    const fenced = text.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+    if (fenced) return fenced[1].trim();
+    const braceStart = text.indexOf('{');
+    const braceEnd = text.lastIndexOf('}');
+    if (braceStart !== -1 && braceEnd > braceStart) return text.slice(braceStart, braceEnd + 1);
+    return text.trim();
+  };
+
+  const repairJson = (jsonStr: string): string => {
+    let s = jsonStr.trim();
+    while (s.length > 0) {
+      const last = s[s.length - 1];
+      if (last === '}' || last === ']' || last === '"' || last === 'e' || last === 'l' || /\d/.test(last)) break;
+      s = s.slice(0, -1);
+    }
+    s = s.replace(/,\s*([\]}])/g, '$1');
+    try { JSON.parse(s); return s; } catch { /* needs more repair */ }
+    const stack: string[] = [];
+    let inString = false;
+    let escape = false;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (escape) { escape = false; continue; }
+      if (ch === '\\' && inString) { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{') stack.push('}');
+      else if (ch === '[') stack.push(']');
+      else if (ch === '}' || ch === ']') stack.pop();
+    }
+    if (inString) s += '"';
+    s = s.replace(/,\s*$/, '');
+    s = s.replace(/:\s*$/, ': null');
+    s = s.replace(/,\s*([\]}])/g, '$1');
+    while (stack.length > 0) { s = s.replace(/,\s*$/, ''); s += stack.pop()!; }
+    return s;
+  };
+
   const processJson = (text: string) => {
     if (!tournament) return;
     try {
-      const data = JSON.parse(text) as GeminiOutput;
+      const jsonStr = extractJson(text);
+      let data: GeminiOutput;
+      try {
+        data = JSON.parse(jsonStr) as GeminiOutput;
+      } catch {
+        const repaired = repairJson(jsonStr);
+        data = JSON.parse(repaired) as GeminiOutput;
+        toast.success("JSON was truncated — auto-repaired partial data");
+      }
       if (!data.groups || !Array.isArray(data.groups)) throw new Error("Invalid JSON format");
       const assignedGroups: AssignedGroup[] = data.groups.map((g) => ({
         ...g,

@@ -32,7 +32,7 @@ export default function CalculateScreen({
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   // OCR upload state
-  const [calcTab, setCalcTab] = useState<"manual" | "auto">("auto");
+  const [calcTab, setCalcTab] = useState<"manual" | "auto">("manual");
   const [showUpload, setShowUpload] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadPreviews, setUploadPreviews] = useState<string[]>([]);

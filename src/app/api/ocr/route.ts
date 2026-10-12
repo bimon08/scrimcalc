@@ -88,7 +88,7 @@ export async function POST(req: Request) {
 
       const requestBody = JSON.stringify({
         contents: [{ parts: [{ text: prompt }, ...imageParts] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 16384 },
+        generationConfig: { temperature: 0, maxOutputTokens: 65536 },
       });
 
       let geminiResponse: Response | null = null;
@@ -149,7 +149,15 @@ export async function POST(req: Request) {
       console.log(`Batch ${batchIdx + 1}/${batches.length} done with ${usedModel} (${batch.length} imgs)`);
 
       const jsonStr = extractJson(textContent);
-      const parsed = JSON.parse(jsonStr);
+      let parsed;
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch {
+        // Gemini may return truncated JSON — try to repair it
+        const repaired = repairJson(jsonStr);
+        parsed = JSON.parse(repaired);
+        console.log(`Batch ${batchIdx + 1}: JSON was truncated, auto-repaired`);
+      }
       return { data: parsed, inputTokens, outputTokens, model: usedModel };
     };
 
@@ -217,6 +225,52 @@ function extractJson(text: string): string {
   if (braceStart !== -1 && braceEnd > braceStart)
     return text.slice(braceStart, braceEnd + 1);
   return text.trim();
+}
+
+/** Repair truncated/malformed JSON — close unclosed brackets, fix trailing commas */
+function repairJson(jsonStr: string): string {
+  let s = jsonStr.trim();
+
+  // Walk backwards to find the last "complete" token
+  while (s.length > 0) {
+    const last = s[s.length - 1];
+    if (last === '}' || last === ']' || last === '"' || last === 'e' || last === 'l' || /\d/.test(last)) break;
+    s = s.slice(0, -1);
+  }
+
+  // Remove trailing commas before closing brackets
+  s = s.replace(/,\s*([\]}])/g, '$1');
+
+  try { JSON.parse(s); return s; } catch { /* needs more repair */ }
+
+  // Track open brackets
+  const stack: string[] = [];
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') stack.push('}');
+    else if (ch === '[') stack.push(']');
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+
+  if (inString) s += '"';
+  s = s.replace(/,\s*$/, '');
+  s = s.replace(/:\s*$/, ': null');
+  s = s.replace(/,\s*([\]}])/g, '$1');
+
+  while (stack.length > 0) {
+    const closer = stack.pop()!;
+    s = s.replace(/,\s*$/, '');
+    s += closer;
+  }
+
+  return s;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -316,7 +370,6 @@ DIGIT READING — CRITICAL:
 PLAYER NAME MATCHING:
 - If a registered team roster is provided above, match each in-game name to the closest registered player
 - In-game names often differ slightly from registered names (extra symbols, case changes, Unicode variants)
-- Examples: "Alpine yVortex" → same person as "AlpineツVortex", "I4BxNICK" → "148xNick", "777sDawann" → "777sDawan"
 - Use the EXACT in-game name as shown on screen in the output (do not substitute the registered name)
 
 TASK:
@@ -325,31 +378,22 @@ TASK:
 3. Match players to registered teams. Unmatched players → use group letters A, B, C…
 4. NEVER merge two position blocks into one group. Each position block = exactly one group.
 5. Do NOT calculate points. Only output positions and kills.
-6. VERIFICATION: After extracting all data, re-read each kill count digit one more time. Compare the team's total kills against the sum of individual player kills for each match.
+6. VERIFICATION: After extracting all data, re-read each kill count digit one more time.
 
-OUTPUT — wrap the JSON in a \`\`\`json code block. No explanation before the JSON:
+OUTPUT FORMAT — CRITICAL RULES:
+- Wrap the JSON in a \`\`\`json code block
+- Output COMPACT/MINIFIED JSON on a single line (no indentation, no newlines inside the JSON)
+- The ENTIRE JSON must be complete and valid — never stop mid-way
+- Do NOT write anything after the closing \`\`\` of the code block — no summary, no explanation, nothing
 
-{
-  "matches_detected": 4,
-  "groups": [
-    {
-      "group": "TeamName",
-      "players": ["Player1", "Player2"],
-      "matches": [
-        {
-          "match": 1,
-          "position": 1,
-          "playerKills": { "Player1": 5, "Player2": 3 }
-        }
-      ]
-    }
-  ]
-}
+Example output format:
+\`\`\`json
+{"matches_detected":4,"groups":[{"group":"TeamName","players":["Player1","Player2"],"matches":[{"match":1,"position":1,"playerKills":{"Player1":5,"Player2":3}}]}]}
+\`\`\`
 
 RULES:
 - One position block = one group entry. Never combine blocks.
 - Player names EXACTLY as on screen — preserve all Unicode, CJK, special chars, superscripts, subscripts
 - "players" = union of all unique players seen across ALL matches for that group
-- Skip matches where a team doesn't appear at all
-- After the JSON code block, on a new line: "Groups: X | Matches: Y" + list any unmatched teams`;
+- Skip matches where a team doesn't appear at all`;
 }

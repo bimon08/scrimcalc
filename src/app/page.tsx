@@ -480,12 +480,80 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
     return text.trim();
   };
 
+  /** Repair truncated/malformed JSON from Gemini — close unclosed brackets, fix trailing commas */
+  const repairJson = (jsonStr: string): string => {
+    let s = jsonStr.trim();
+
+    // Remove any trailing text after a truncation (incomplete string values, dangling keys, etc.)
+    // Walk backwards to find the last "complete" token
+    while (s.length > 0) {
+      const last = s[s.length - 1];
+      // These are valid JSON ending characters
+      if (last === '}' || last === ']' || last === '"' || last === 'e' || last === 'l' || /\d/.test(last)) break;
+      s = s.slice(0, -1);
+    }
+
+    // Remove trailing commas before closing brackets (invalid JSON)
+    s = s.replace(/,\s*([\]}])/g, '$1');
+
+    // Try parsing as-is first
+    try { JSON.parse(s); return s; } catch { /* needs repair */ }
+
+    // Track what brackets are open
+    const stack: string[] = [];
+    let inString = false;
+    let escape = false;
+
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (escape) { escape = false; continue; }
+      if (ch === '\\' && inString) { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{') stack.push('}');
+      else if (ch === '[') stack.push(']');
+      else if (ch === '}' || ch === ']') stack.pop();
+    }
+
+    // If we ended inside a string, close it
+    if (inString) s += '"';
+
+    // Remove trailing commas or colons or incomplete key-value pairs at the end
+    s = s.replace(/,\s*$/, '');
+    s = s.replace(/:\s*$/, ': null');
+    s = s.replace(/,\s*([\]}])/g, '$1');
+
+    // Close all unclosed brackets/braces in reverse order
+    while (stack.length > 0) {
+      const closer = stack.pop()!;
+      // Remove trailing comma before closing
+      s = s.replace(/,\s*$/, '');
+      s += closer;
+    }
+
+    return s;
+  };
+
   const processJson = (text: string) => {
     if (!tournament) return;
     try {
       const jsonStr = extractJson(text);
-      const raw = JSON.parse(jsonStr) as GeminiOutput;
-      if (!raw.groups || !Array.isArray(raw.groups)) throw new Error("Invalid JSON");
+
+      // Try direct parse first, if it fails try repairing truncated JSON
+      let raw: GeminiOutput;
+      try {
+        raw = JSON.parse(jsonStr) as GeminiOutput;
+      } catch {
+        const repaired = repairJson(jsonStr);
+        try {
+          raw = JSON.parse(repaired) as GeminiOutput;
+          toast.success("JSON was truncated — auto-repaired partial data");
+        } catch (repairErr: unknown) {
+          throw new Error(`JSON is too corrupted to repair: ${(repairErr as Error).message}`);
+        }
+      }
+
+      if (!raw.groups || !Array.isArray(raw.groups)) throw new Error("Invalid JSON — missing 'groups' array");
       const data = normalizeGeminiData(raw, tournament);
 
       // If data already exists, show confirmation modal instead of replacing immediately

@@ -36,31 +36,22 @@ TASK:
 4. NEVER merge two position blocks into one group. Each block = one group.
 5. Do NOT calculate points. Only output positions and kills.
 
-OUTPUT — wrap the JSON in a \`\`\`json code block so it can be copied easily. No explanation before the JSON:
+OUTPUT FORMAT — CRITICAL RULES:
+- Wrap the JSON in a \`\`\`json code block
+- Output COMPACT/MINIFIED JSON on a single line (no indentation, no newlines inside the JSON)
+- The ENTIRE JSON must be complete and valid — never stop mid-way
+- Do NOT write anything after the closing \`\`\` of the code block — no summary, no explanation
 
-{
-  "matches_detected": 4,
-  "groups": [
-    {
-      "group": "TeamName",
-      "players": ["Player1", "Player2"],
-      "matches": [
-        {
-          "match": 1,
-          "position": 1,
-          "playerKills": { "Player1": 5, "Player2": 3 }
-        }
-      ]
-    }
-  ]
-}
+Example output format:
+\`\`\`json
+{"matches_detected":4,"groups":[{"group":"TeamName","players":["Player1","Player2"],"matches":[{"match":1,"position":1,"playerKills":{"Player1":5,"Player2":3}}]}]}
+\`\`\`
 
 RULES:
 - One position block = one group entry. Never combine blocks.
 - Player names EXACTLY as on screen
 - "players" = union of all players seen across all matches for that group
 - Skip matches where a team doesn't appear
-- After the JSON code block, on a new line: "Groups: X | Matches: Y" + list any unmatched teams
 
 I'll upload images now. Reply ONLY with "received" for each batch. Do NOT start analyzing until I say "ok".`;
 }
