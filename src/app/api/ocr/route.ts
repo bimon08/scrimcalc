@@ -4,8 +4,8 @@ import { generatePrompt } from "@/lib/prompt";
 import { Team } from "@/lib/types";
 import { prisma } from "@/lib/prisma";
 
-// Allow up to 120s for processing many screenshots
-export const maxDuration = 120;
+// Allow up to 300s (5 min) — 16+ full-res screenshots can take a while
+export const maxDuration = 300;
 
 /**
  * POST /api/ocr
@@ -54,25 +54,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Build Gemini API request with inline images
-    // Use a simplified direct prompt (no upload flow needed for API calls)
     const prompt = generateDirectPrompt(teams);
-
-    // Convert images to base64 parts for Gemini
-    const imageParts = await Promise.all(
-      imageFiles.map(async (file) => {
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const base64 = buffer.toString("base64");
-        return {
-          inline_data: {
-            mime_type: file.type || "image/png",
-            data: base64,
-          },
-        };
-      }),
-    );
-
-    // Try models in order — fallback if one is unavailable or overloaded
     const models = [
       "gemini-3.8-flash",
       "gemini-3.7-flash",
@@ -80,94 +62,131 @@ export async function POST(req: Request) {
       "gemini-3.5-flash",
     ];
 
-    const requestBody = JSON.stringify({
-      contents: [
-        {
-          parts: [
-            { text: prompt },
-            ...imageParts,
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0,
-        maxOutputTokens: 16384,
-      },
-    });
-
-    let geminiResponse: Response | null = null;
-    let usedModel = models[0];
     const startTime = Date.now();
+    const BATCH_SIZE = 4; // 4 images per API call for reliability + accuracy
 
-    for (const model of models) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: requestBody,
-      });
-
-      if (res.ok) {
-        geminiResponse = res;
-        usedModel = model;
-        break;
-      }
-
-      // Retry with next model on 404 (deprecated) or 503 (overloaded)
-      if (res.status === 404 || res.status === 503) {
-        console.warn(`Model ${model} unavailable (${res.status}), trying next...`);
-        continue;
-      }
-
-      // Other errors — don't retry, return immediately
-      const errBody = await res.text();
-      console.error("Gemini API error:", res.status, errBody);
-
-      // Log failed API call
-      await logApiUsage(caller.userId, userEmail, model, imageFiles.length, 0, 0, Date.now() - startTime, "error", `API error ${res.status}`);
-
-      return NextResponse.json(
-        { error: `Gemini API error: ${res.status}`, details: errBody },
-        { status: 502 },
-      );
+    // Split images into batches
+    const batches: File[][] = [];
+    for (let i = 0; i < imageFiles.length; i += BATCH_SIZE) {
+      batches.push(imageFiles.slice(i, i + BATCH_SIZE));
     }
 
-    if (!geminiResponse) {
-      await logApiUsage(caller.userId, userEmail, "none", imageFiles.length, 0, 0, Date.now() - startTime, "error", "All models unavailable");
-      return NextResponse.json(
-        { error: "All Gemini models unavailable. Try again later." },
-        { status: 502 },
+    console.log(`Processing ${imageFiles.length} images in ${batches.length} batch(es) of up to ${BATCH_SIZE}`);
+
+    // Process each batch
+    const batchResults: Array<{ data: Record<string, unknown>; inputTokens: number; outputTokens: number; model: string }> = [];
+
+    for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+      const batch = batches[batchIdx];
+
+      // Convert batch images to base64
+      const imageParts = await Promise.all(
+        batch.map(async (file) => {
+          const buffer = Buffer.from(await file.arrayBuffer());
+          const base64 = buffer.toString("base64");
+          return {
+            inline_data: {
+              mime_type: file.type || "image/png",
+              data: base64,
+            },
+          };
+        }),
       );
+
+      const requestBody = JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              ...imageParts,
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: 16384,
+        },
+      });
+
+      // Try models in order for this batch
+      let geminiResponse: Response | null = null;
+      let usedModel = models[0];
+
+      for (const model of models) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: requestBody,
+        });
+
+        if (res.ok) {
+          geminiResponse = res;
+          usedModel = model;
+          break;
+        }
+
+        if (res.status === 404 || res.status === 503) {
+          console.warn(`Batch ${batchIdx + 1}: Model ${model} unavailable (${res.status}), trying next...`);
+          continue;
+        }
+
+        const errBody = await res.text();
+        console.error(`Batch ${batchIdx + 1}: Gemini API error:`, res.status, errBody);
+        await logApiUsage(caller.userId, userEmail, model, batch.length, 0, 0, Date.now() - startTime, "error", `Batch ${batchIdx + 1} API error ${res.status}`);
+        return NextResponse.json(
+          { error: `Gemini API error: ${res.status}`, details: errBody },
+          { status: 502 },
+        );
+      }
+
+      if (!geminiResponse) {
+        await logApiUsage(caller.userId, userEmail, "none", batch.length, 0, 0, Date.now() - startTime, "error", `Batch ${batchIdx + 1}: All models unavailable`);
+        return NextResponse.json(
+          { error: "All Gemini models unavailable. Try again later." },
+          { status: 502 },
+        );
+      }
+
+      const geminiResult = await geminiResponse.json();
+      const textContent = geminiResult?.candidates?.[0]?.content?.parts?.[0]?.text;
+      const usageMetadata = geminiResult?.usageMetadata;
+      const inputTokens = usageMetadata?.promptTokenCount ?? 0;
+      const outputTokens = usageMetadata?.candidatesTokenCount ?? 0;
+
+      if (!textContent) {
+        await logApiUsage(caller.userId, userEmail, usedModel, batch.length, inputTokens, outputTokens, Date.now() - startTime, "error", `Batch ${batchIdx + 1}: No response text`);
+        return NextResponse.json(
+          { error: `Batch ${batchIdx + 1}: No response from Gemini` },
+          { status: 502 },
+        );
+      }
+
+      console.log(`Batch ${batchIdx + 1}/${batches.length} completed with ${usedModel} (${batch.length} images)`);
+
+      const jsonStr = extractJson(textContent);
+      const parsed = JSON.parse(jsonStr);
+      batchResults.push({ data: parsed, inputTokens, outputTokens, model: usedModel });
     }
 
     const durationMs = Date.now() - startTime;
-    console.log(`OCR completed with model: ${usedModel} in ${durationMs}ms`);
 
-    const geminiResult = await geminiResponse.json();
-    const textContent =
-      geminiResult?.candidates?.[0]?.content?.parts?.[0]?.text;
+    // Merge batch results
+    const mergedData = batchResults.length === 1
+      ? batchResults[0].data
+      : mergeBatchResults(batchResults.map((r) => r.data));
 
-    // Extract token usage from Gemini response
-    const usageMetadata = geminiResult?.usageMetadata;
-    const inputTokens = usageMetadata?.promptTokenCount ?? 0;
-    const outputTokens = usageMetadata?.candidatesTokenCount ?? 0;
+    // Sum up token usage across all batches
+    const totalInputTokens = batchResults.reduce((sum, r) => sum + r.inputTokens, 0);
+    const totalOutputTokens = batchResults.reduce((sum, r) => sum + r.outputTokens, 0);
+    const usedModel = batchResults[batchResults.length - 1]?.model ?? "unknown";
 
-    if (!textContent) {
-      await logApiUsage(caller.userId, userEmail, usedModel, imageFiles.length, inputTokens, outputTokens, durationMs, "error", "No response text");
-      return NextResponse.json(
-        { error: "No response from Gemini" },
-        { status: 502 },
-      );
-    }
-
-    // Extract JSON from the response (handles ```json fences)
-    const jsonStr = extractJson(textContent);
-    const parsed = JSON.parse(jsonStr);
+    console.log(`OCR completed: ${batches.length} batches, ${imageFiles.length} images, ${durationMs}ms`);
 
     // Log successful API call
-    await logApiUsage(caller.userId, userEmail, usedModel, imageFiles.length, inputTokens, outputTokens, durationMs, "success");
+    await logApiUsage(caller.userId, userEmail, usedModel, imageFiles.length, totalInputTokens, totalOutputTokens, durationMs, "success");
 
-    return NextResponse.json({ data: parsed, raw: textContent });
+    return NextResponse.json({ data: mergedData });
   } catch (err: unknown) {
     console.error("OCR route error:", err);
     const message =
@@ -207,6 +226,61 @@ function extractJson(text: string): string {
     return text.slice(braceStart, braceEnd + 1);
   return text.trim();
 }
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/** Merge results from multiple batches into a single GeminiOutput.
+ *  Each batch returns its own match numbering (1,2,3...).
+ *  We renumber them sequentially across batches:
+ *    Batch 0 matches: 1,2,3,4
+ *    Batch 1 matches: 5,6,7,8
+ *    etc.
+ *  Groups with the same name across batches are merged.
+ */
+function mergeBatchResults(batchDatas: Record<string, any>[]): Record<string, any> {
+  const groupMap = new Map<string, any>();
+  let totalMatches = 0;
+
+  for (const batchData of batchDatas) {
+    const batchMatchCount = batchData.matches_detected || 0;
+    const matchOffset = totalMatches; // Offset for renumbering
+
+    for (const group of (batchData.groups || [])) {
+      const key = (group.group || "").toUpperCase().trim();
+      if (!groupMap.has(key)) {
+        groupMap.set(key, {
+          group: group.group,
+          players: [...(group.players || [])],
+          matches: [],
+        });
+      }
+
+      const existing = groupMap.get(key)!;
+
+      // Merge players (deduplicate)
+      for (const p of (group.players || [])) {
+        if (!existing.players.includes(p)) {
+          existing.players.push(p);
+        }
+      }
+
+      // Add matches with renumbered match numbers
+      for (const match of (group.matches || [])) {
+        existing.matches.push({
+          ...match,
+          match: match.match + matchOffset,
+        });
+      }
+    }
+
+    totalMatches += batchMatchCount;
+  }
+
+  return {
+    matches_detected: totalMatches,
+    groups: Array.from(groupMap.values()),
+  };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
  * Direct prompt for API-based OCR (no multi-turn upload flow needed).

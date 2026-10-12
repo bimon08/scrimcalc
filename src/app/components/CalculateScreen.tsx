@@ -107,24 +107,19 @@ export default function CalculateScreen({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [previewModalIndex, uploadPreviews.length]);
 
-  // Prepare image for OCR: preserve original quality for small files, only compress oversized ones
+  // Prepare image: keep originals under 4MB, compress larger ones
   const prepareImage = async (file: File): Promise<Blob> => {
-    const MAX_DIRECT_SIZE = 4 * 1024 * 1024; // 4MB — send originals below this
-    if (file.size <= MAX_DIRECT_SIZE) return file; // Keep crisp original pixels
-
-    // Only compress if file is too large — use high quality to preserve digit clarity
+    if (file.size <= 4 * 1024 * 1024) return file; // Keep crisp original
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const maxWidth = 2560; // Higher max to preserve detail
-        const scale = Math.min(1, maxWidth / img.width);
+        const scale = Math.min(1, 2560 / img.width);
         canvas.width = img.width * scale;
         canvas.height = img.height * scale;
         const ctx = canvas.getContext("2d")!;
-        ctx.imageSmoothingEnabled = false; // No blur on downscale
+        ctx.imageSmoothingEnabled = false;
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        // Use high quality — OCR accuracy > file size
         canvas.toBlob((blob) => resolve(blob!), "image/jpeg", 0.95);
       };
       img.src = URL.createObjectURL(file);
@@ -144,11 +139,10 @@ export default function CalculateScreen({
       const activeTeams = tournament.teams.filter((t) => !t.out);
       formData.append("teams", JSON.stringify(activeTeams));
 
-      // Preserve original quality for crisp digit recognition
+      // Compress images based on batch size to avoid payload limits
       for (let i = 0; i < uploadFiles.length; i++) {
         const prepared = await prepareImage(uploadFiles[i]);
-        const ext = uploadFiles[i].size <= 4 * 1024 * 1024 ? uploadFiles[i].name.split(".").pop() || "png" : "jpg";
-        formData.append("images", prepared, `screenshot_${i + 1}.${ext}`);
+        formData.append("images", prepared, `screenshot_${i + 1}.jpg`);
       }
 
       const res = await fetch("/api/ocr", {
