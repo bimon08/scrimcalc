@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     ];
 
     const startTime = Date.now();
-    const BATCH_SIZE = 4; // 4 images per API call for reliability + accuracy
+    const BATCH_SIZE = 8; // 8 images per call — fewer API calls = less rate limiting
 
     // Split images into batches
     const batches: File[][] = [];
@@ -153,16 +153,12 @@ export async function POST(req: Request) {
       return { data: parsed, inputTokens, outputTokens, model: usedModel };
     };
 
-    // Process batches with limited concurrency (2 at a time to avoid rate limits)
-    const CONCURRENCY = 2;
+    // Process batches sequentially to avoid free-tier rate limits
     const batchResults: Array<{ data: Record<string, unknown>; inputTokens: number; outputTokens: number; model: string }> = [];
 
-    for (let i = 0; i < batches.length; i += CONCURRENCY) {
-      const chunk = batches.slice(i, i + CONCURRENCY);
-      const chunkResults = await Promise.all(
-        chunk.map((batch, idx) => processBatch(batch, i + idx)),
-      );
-      batchResults.push(...chunkResults);
+    for (let i = 0; i < batches.length; i++) {
+      const result = await processBatch(batches[i], i);
+      batchResults.push(result);
     }
 
     const durationMs = Date.now() - startTime;
