@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { Trash2, X, ChevronDown, ChevronUp, ClipboardPaste, Trophy } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Trash2, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ClipboardPaste, Trophy, Upload, Camera, Loader2, ImageIcon, X as XIcon, Eye, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Tournament, AssignedGroup, StandingRow, DEFAULT_BGMI_POINTS } from "@/lib/types";
 import GroupFilterDropdown from "./GroupFilterDropdown";
@@ -19,15 +19,28 @@ interface Props {
   onPasteJson: () => void;
   onClearData: () => void;
   onClose: () => void;
+  onOcrResult?: (json: string) => void;
 }
 
 export default function CalculateScreen({
   tournament, groups, assignments, matchesDetected, groupFilter, setGroupFilter,
   onAssignTeam, onUnassignTeam, onCopyPrompt, onPasteJson, onClearData, onClose,
+  onOcrResult,
 }: Props) {
   const [selectedMatch, setSelectedMatch] = useState<number | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+
+  // OCR upload state
+  const [calcTab, setCalcTab] = useState<"manual" | "auto">("auto");
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadPreviews, setUploadPreviews] = useState<string[]>([]);
+  const [previewModalIndex, setPreviewModalIndex] = useState<number | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [showAddMatches, setShowAddMatches] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleExpand = (g: string) => setExpandedGroups(p => { const n = new Set(p); n.has(g) ? n.delete(g) : n.add(g); return n; });
   const assignedTeamIds = new Set(Object.values(assignments));
@@ -45,6 +58,131 @@ export default function CalculateScreen({
     const team = tournament.teams.find(t => t.id === teamId);
     return team?.group === groupFilter;
   });
+
+  // ── OCR upload handlers ──
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const newFiles = [...uploadFiles, ...files];
+    setUploadFiles(newFiles);
+    // Generate previews
+    const newPreviews = [...uploadPreviews];
+    files.forEach((f) => {
+      newPreviews.push(URL.createObjectURL(f));
+    });
+    setUploadPreviews(newPreviews);
+    setOcrError(null);
+    // Reset the input so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removeFile = (idx: number) => {
+    URL.revokeObjectURL(uploadPreviews[idx]);
+    setUploadFiles((prev) => prev.filter((_, i) => i !== idx));
+    setUploadPreviews((prev) => {
+      const updated = prev.filter((_, i) => i !== idx);
+      setPreviewModalIndex((curr) => {
+        if (curr === null) return null;
+        if (updated.length === 0) return null;
+        if (curr === idx) return Math.min(curr, updated.length - 1);
+        if (curr > idx) return curr - 1;
+        return curr;
+      });
+      return updated;
+    });
+  };
+
+  // Keyboard navigation for image preview lightbox
+  useEffect(() => {
+    if (previewModalIndex === null) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPreviewModalIndex(null);
+      else if (e.key === "ArrowLeft") {
+        setPreviewModalIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : uploadPreviews.length - 1));
+      } else if (e.key === "ArrowRight") {
+        setPreviewModalIndex((prev) => (prev !== null && prev < uploadPreviews.length - 1 ? prev + 1 : 0));
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewModalIndex, uploadPreviews.length]);
+
+  // Prepare image for OCR: preserve original quality for small files, only compress oversized ones
+  const prepareImage = async (file: File): Promise<Blob> => {
+    const MAX_DIRECT_SIZE = 4 * 1024 * 1024; // 4MB — send originals below this
+    if (file.size <= MAX_DIRECT_SIZE) return file; // Keep crisp original pixels
+
+    // Only compress if file is too large — use high quality to preserve digit clarity
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxWidth = 2560; // Higher max to preserve detail
+        const scale = Math.min(1, maxWidth / img.width);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext("2d")!;
+        ctx.imageSmoothingEnabled = false; // No blur on downscale
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        // Use high quality — OCR accuracy > file size
+        canvas.toBlob((blob) => resolve(blob!), "image/jpeg", 0.95);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handleOcrSubmit = async () => {
+    if (uploadFiles.length === 0) {
+      toast.error("Add at least one screenshot");
+      return;
+    }
+    setIsProcessing(true);
+    setOcrError(null);
+
+    try {
+      const formData = new FormData();
+      const activeTeams = tournament.teams.filter((t) => !t.out);
+      formData.append("teams", JSON.stringify(activeTeams));
+
+      // Preserve original quality for crisp digit recognition
+      for (let i = 0; i < uploadFiles.length; i++) {
+        const prepared = await prepareImage(uploadFiles[i]);
+        const ext = uploadFiles[i].size <= 4 * 1024 * 1024 ? uploadFiles[i].name.split(".").pop() || "png" : "jpg";
+        formData.append("images", prepared, `screenshot_${i + 1}.${ext}`);
+      }
+
+      const res = await fetch("/api/ocr", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const detail = body.details ? `\n${body.details}` : "";
+        throw new Error((body.error || `Server error ${res.status}`) + detail);
+      }
+
+      const result = await res.json();
+      if (result.data) {
+        // Auto-apply the OCR result immediately
+        const jsonStr = JSON.stringify(result.data, null, 2);
+        if (onOcrResult) onOcrResult(jsonStr);
+        // Clean up upload state
+        uploadPreviews.forEach((p) => URL.revokeObjectURL(p));
+        setUploadFiles([]);
+        setUploadPreviews([]);
+        setShowAddMatches(false);
+      } else {
+        throw new Error("No data in response");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "OCR failed";
+      setOcrError(msg);
+      toast.error(msg);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[55] overflow-y-auto" style={{ background: "#0c0914" }}>
@@ -69,54 +207,233 @@ export default function CalculateScreen({
         </div>
 
         {groups.length === 0 ? (
-          /* ── Empty state: AI guide ── */
-          <div className="mt-6 px-1">
-            <div className="w-full rounded-2xl p-4" style={{ background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.25)" }}>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(124,58,237,0.2)" }}>
-                  <svg width="22" height="22" viewBox="0 0 65 65" fill="none" xmlns="http://www.w3.org/2000/svg"><mask id="maskme" style={{maskType:"alpha"}} maskUnits="userSpaceOnUse" x="0" y="0" width="65" height="65"><path d="M32.447 0c.68 0 1.273.465 1.439 1.125a38.904 38.904 0 001.999 5.905c2.152 5 5.105 9.376 8.854 13.125 3.751 3.75 8.126 6.703 13.125 8.855a38.98 38.98 0 005.906 1.999c.66.166 1.124.758 1.124 1.438 0 .68-.464 1.273-1.125 1.439a38.902 38.902 0 00-5.905 1.999c-5 2.152-9.375 5.105-13.125 8.854-3.749 3.751-6.702 8.126-8.854 13.125a38.973 38.973 0 00-2 5.906 1.485 1.485 0 01-1.438 1.124c-.68 0-1.272-.464-1.438-1.125a38.913 38.913 0 00-2-5.905c-2.151-5-5.103-9.375-8.854-13.125-3.75-3.749-8.125-6.702-13.125-8.854a38.973 38.973 0 00-5.905-2A1.485 1.485 0 010 32.448c0-.68.465-1.272 1.125-1.438a38.903 38.903 0 005.905-2c5-2.151 9.376-5.104 13.125-8.854 3.75-3.749 6.703-8.125 8.855-13.125a38.972 38.972 0 001.999-5.905A1.485 1.485 0 0132.447 0z" fill="#000"/><path d="M32.447 0c.68 0 1.273.465 1.439 1.125a38.904 38.904 0 001.999 5.905c2.152 5 5.105 9.376 8.854 13.125 3.751 3.75 8.126 6.703 13.125 8.855a38.98 38.98 0 005.906 1.999c.66.166 1.124.758 1.124 1.438 0 .68-.464 1.273-1.125 1.439a38.902 38.902 0 00-5.905 1.999c-5 2.152-9.375 5.105-13.125 8.854-3.749 3.751-6.702 8.126-8.854 13.125a38.973 38.973 0 00-2 5.906 1.485 1.485 0 01-1.438 1.124c-.68 0-1.272-.464-1.438-1.125a38.913 38.913 0 00-2-5.905c-2.151-5-5.103-9.375-8.854-13.125-3.75-3.749-8.125-6.702-13.125-8.854a38.973 38.973 0 00-5.905-2A1.485 1.485 0 010 32.448c0-.68.465-1.272 1.125-1.438a38.903 38.903 0 005.905-2c5-2.151 9.376-5.104 13.125-8.854 3.75-3.749 6.703-8.125 8.855-13.125a38.972 38.972 0 001.999-5.905A1.485 1.485 0 0132.447 0z" fill="url(#gg1)"/></mask><g mask="url(#maskme)"><g filter="url(#gf0)"><path d="M-5.859 50.734c7.498 2.663 16.116-2.33 19.249-11.152 3.133-8.821-.406-18.131-7.904-20.794-7.498-2.663-16.116 2.33-19.25 11.151-3.132 8.822.407 18.132 7.905 20.795z" fill="#FFE432"/></g><g filter="url(#gf1)"><path d="M27.433 21.649c10.3 0 18.651-8.535 18.651-19.062 0-10.528-8.35-19.062-18.651-19.062S8.78-7.94 8.78 2.587c0 10.527 8.35 19.062 18.652 19.062z" fill="#FC413D"/></g><g filter="url(#gf2)"><path d="M20.184 82.608c10.753-.525 18.918-12.244 18.237-26.174-.68-13.93-9.95-24.797-20.703-24.271C6.965 32.689-1.2 44.407-.519 58.337c.681 13.93 9.95 24.797 20.703 24.271z" fill="#00B95C"/></g><g filter="url(#gf5)"><path d="M67.391 42.993c10.132 0 18.346-7.91 18.346-17.666 0-9.757-8.214-17.667-18.346-17.667s-18.346 7.91-18.346 17.667c0 9.757 8.214 17.666 18.346 17.666z" fill="#3186FF"/></g><g filter="url(#gf7)"><path d="M34.74 51.43c11.135 7.656 25.896 5.524 32.968-4.764 7.073-10.287 3.779-24.832-7.357-32.488C49.215 6.52 34.455 8.654 27.382 18.94c-7.072 10.288-3.779 24.833 7.357 32.49z" fill="#3186FF"/></g></g><defs><filter id="gf0" x="-19.824" y="13.152" width="39.274" height="43.217" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB"><feFlood floodOpacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="2.46" result="effect1_foregroundBlur"/></filter><filter id="gf1" x="-15.001" y="-40.257" width="84.868" height="85.688" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB"><feFlood floodOpacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="11.891" result="effect1_foregroundBlur"/></filter><filter id="gf2" x="-20.776" y="11.927" width="79.454" height="90.916" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB"><feFlood floodOpacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="10.109" result="effect1_foregroundBlur"/></filter><filter id="gf5" x="29.832" y="-11.552" width="75.117" height="73.758" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB"><feFlood floodOpacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="9.606" result="effect1_foregroundBlur"/></filter><filter id="gf7" x="8.107" y="-5.966" width="78.877" height="77.539" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB"><feFlood floodOpacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur stdDeviation="7.775" result="effect1_foregroundBlur"/></filter><linearGradient id="gg1" x1="18.447" y1="43.42" x2="52.153" y2="15.004" gradientUnits="userSpaceOnUse"><stop stopColor="#4893FC"/><stop offset=".27" stopColor="#4893FC"/><stop offset=".777" stopColor="#969DFF"/><stop offset="1" stopColor="#BD99FE"/></linearGradient></defs></svg>
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-white">Calculate with AI — free</p>
-                  <p className="text-xs mt-0.5" style={{ color: "rgba(167,139,250,0.55)" }}>How to use Gemini</p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {[
-                  { step: "1", title: "Copy the prompt below", desc: "Tap Copy Prompt, then open Gemini and paste it" },
-                  { step: "2", title: "Send & upload screenshots", desc: "Reply with your match result screenshots in the next message" },
-                  { step: "3", title: "Copy the JSON reply", desc: "Gemini responds with a JSON block — select and copy it" },
-                  { step: "4", title: "Paste it here", desc: "Come back and tap the purple 'Paste' button below" },
-                ].map((s) => (
-                  <div key={s.step} className="flex items-start gap-3">
-                    <div className="h-7 w-7 rounded-lg shrink-0 flex items-center justify-center text-xs font-black" style={{ background: "rgba(124,58,237,0.3)", color: "#c4b5fd" }}>{s.step}</div>
-                    <div className="flex-1">
-                      <p className="text-xs font-bold text-white">{s.title}</p>
-                      <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: "rgba(167,139,250,0.6)" }}>{s.desc}</p>
-                    </div>
-                  </div>
-                ))}
-
-                <div className="pt-2 space-y-2">
-                  <button onClick={onCopyPrompt} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white press-scale" style={{ background: "linear-gradient(135deg,#7c3aed,#9333ea)", boxShadow: "0 4px 20px rgba(124,58,237,0.4)" }}>Copy Prompt</button>
-                  <button onClick={onPasteJson} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold press-scale" style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", color: "#c4b5fd" }}><ClipboardPaste className="h-4 w-4" /> Paste JSON from Gemini</button>
-                  <p className="text-[10px] text-center pt-0.5" style={{ color: "rgba(167,139,250,0.35)" }}>Prompt copied to clipboard · paste in Gemini</p>
-                </div>
-              </div>
+          /* ── Empty state: Tabbed UI ── */
+          <div className="mt-2 px-1">
+            {/* Tab bar */}
+            <div className="flex rounded-xl p-1 mb-4" style={{ background: "rgba(24,24,27,0.6)", border: "1px solid rgba(63,63,70,0.3)" }}>
+              <button
+                onClick={() => setCalcTab("auto")}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all"
+                style={calcTab === "auto"
+                  ? { background: "linear-gradient(135deg, #059669, #10b981)", color: "#fff", boxShadow: "0 2px 12px rgba(16,185,129,0.3)" }
+                  : { color: "rgba(52,211,153,0.5)" }
+                }
+              >
+                <Camera className="h-3.5 w-3.5" /> Auto Scan
+              </button>
+              <button
+                onClick={() => setCalcTab("manual")}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all"
+                style={calcTab === "manual"
+                  ? { background: "linear-gradient(135deg,#7c3aed,#9333ea)", color: "#fff", boxShadow: "0 2px 12px rgba(124,58,237,0.3)" }
+                  : { color: "rgba(167,139,250,0.5)" }
+                }
+              >
+                <ClipboardPaste className="h-3.5 w-3.5" /> Manual
+              </button>
             </div>
+
+            {calcTab === "manual" ? (
+              /* ── Manual tab ── */
+              <div className="w-full rounded-2xl p-4" style={{ background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.25)" }}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(124,58,237,0.2)" }}>
+                    <ClipboardPaste className="h-5 w-5" style={{ color: "#a78bfa" }} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-white">Use Gemini manually</p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(167,139,250,0.55)" }}>Copy prompt → paste in Gemini → copy JSON back</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { step: "1", title: "Copy the prompt below", desc: "Tap Copy Prompt, then open Gemini and paste it" },
+                    { step: "2", title: "Send & upload screenshots", desc: "Reply with your match result screenshots in the next message" },
+                    { step: "3", title: "Copy the JSON reply", desc: "Gemini responds with a JSON block — select and copy it" },
+                    { step: "4", title: "Paste it here", desc: "Come back and tap the purple 'Paste' button below" },
+                  ].map((s) => (
+                    <div key={s.step} className="flex items-start gap-3">
+                      <div className="h-7 w-7 rounded-lg shrink-0 flex items-center justify-center text-xs font-black" style={{ background: "rgba(124,58,237,0.3)", color: "#c4b5fd" }}>{s.step}</div>
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-white">{s.title}</p>
+                        <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: "rgba(167,139,250,0.6)" }}>{s.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="pt-2 space-y-2">
+                    <button onClick={onCopyPrompt} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white press-scale" style={{ background: "linear-gradient(135deg,#7c3aed,#9333ea)", boxShadow: "0 4px 20px rgba(124,58,237,0.4)" }}>Copy Prompt</button>
+                    <button onClick={onPasteJson} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold press-scale" style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", color: "#c4b5fd" }}><ClipboardPaste className="h-4 w-4" /> Paste JSON from Gemini</button>
+                    <p className="text-[10px] text-center pt-0.5" style={{ color: "rgba(167,139,250,0.35)" }}>Prompt copied to clipboard · paste in Gemini</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* ── Auto Scan tab ── */
+              <div className="w-full rounded-2xl p-4 space-y-4" style={{ background: "linear-gradient(135deg, rgba(16,185,129,0.06), rgba(5,150,105,0.03))", border: "1px solid rgba(16,185,129,0.2)" }}>
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(16,185,129,0.15)" }}>
+                    <Camera className="h-4 w-4 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-white">Upload Screenshots</p>
+                    <p className="text-[10px]" style={{ color: "rgba(52,211,153,0.6)" }}>AI reads your scoreboards instantly</p>
+                  </div>
+                </div>
+
+                {uploadPreviews.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                    {uploadPreviews.map((src, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => setPreviewModalIndex(idx)}
+                        className="relative shrink-0 h-20 w-20 rounded-lg overflow-hidden border cursor-pointer group active:scale-95 transition-all"
+                        style={{ borderColor: "rgba(16,185,129,0.3)" }}
+                        title="Click to preview screenshot"
+                      >
+                        <img src={src} alt={`Screenshot ${idx + 1}`} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/35 transition-colors flex items-center justify-center pointer-events-none">
+                          <Eye className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFile(idx);
+                          }}
+                          className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full flex items-center justify-center bg-black/80 hover:bg-red-600 text-white transition-all active:scale-90 z-10"
+                          title="Remove screenshot"
+                        >
+                          <XIcon className="h-3 w-3" />
+                        </button>
+                        <span className="absolute bottom-0.5 left-0.5 text-[9px] font-bold px-1 rounded bg-black/60 text-white z-10 pointer-events-none">
+                          {idx + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" id="ocr-file-input" />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isProcessing}
+                  className="w-full flex flex-col items-center justify-center gap-2 py-5 rounded-xl border-2 border-dashed transition-all active:scale-[0.98]"
+                  style={{ borderColor: uploadFiles.length > 0 ? "rgba(16,185,129,0.3)" : "rgba(63,63,70,0.5)", background: uploadFiles.length > 0 ? "rgba(16,185,129,0.03)" : "rgba(24,24,27,0.3)" }}
+                >
+                  <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(16,185,129,0.1)" }}>
+                    <Upload className="h-5 w-5 text-emerald-400/70" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-semibold" style={{ color: uploadFiles.length > 0 ? "#34d399" : "rgba(161,161,170,0.8)" }}>
+                      {uploadFiles.length > 0 ? `${uploadFiles.length} screenshot${uploadFiles.length > 1 ? "s" : ""} added` : "Tap to add screenshots"}
+                    </p>
+                    <p className="text-[10px] mt-0.5" style={{ color: "rgba(161,161,170,0.4)" }}>
+                      {uploadFiles.length > 0 ? "Tap to add more" : "Select match result screenshots"}
+                    </p>
+                  </div>
+                </button>
+
+                {ocrError && (
+                  <div className="px-3 py-2 rounded-lg text-xs" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#f87171" }}>{ocrError}</div>
+                )}
+
+                <button
+                  onClick={handleOcrSubmit}
+                  disabled={uploadFiles.length === 0 || isProcessing}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ background: isProcessing ? "rgba(16,185,129,0.3)" : "linear-gradient(135deg, #059669, #10b981)", boxShadow: isProcessing ? "none" : "0 4px 20px rgba(16,185,129,0.3)" }}
+                >
+                  {isProcessing ? (<><Loader2 className="h-4 w-4 animate-spin" /> Processing with AI…</>) : (<><ImageIcon className="h-4 w-4" /> Scan {uploadFiles.length} Screenshot{uploadFiles.length !== 1 ? "s" : ""}</>)}
+                </button>
+
+
+
+                <p className="text-[10px] text-center" style={{ color: "rgba(52,211,153,0.3)" }}>Screenshots are processed by Gemini AI · no data stored</p>
+              </div>
+            )}
           </div>
         ) : (
           /* ── Groups list ── */
           <>
+          {/* Add More Matches upload panel (expanded) */}
+          {showAddMatches && (
+            <div className="mb-3 rounded-2xl p-4 space-y-3" style={{ background: "linear-gradient(135deg, rgba(16,185,129,0.06), rgba(5,150,105,0.03))", border: "1px solid rgba(16,185,129,0.2)" }}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-lg flex items-center justify-center" style={{ background: "rgba(16,185,129,0.15)" }}>
+                    <Camera className="h-3.5 w-3.5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-white">Add More Matches</p>
+                    <p className="text-[10px]" style={{ color: "rgba(52,211,153,0.5)" }}>Upload new match screenshots</p>
+                  </div>
+                </div>
+                <button onClick={() => { setShowAddMatches(false); uploadPreviews.forEach((p) => URL.revokeObjectURL(p)); setUploadFiles([]); setUploadPreviews([]); setOcrError(null); }} className="p-1.5 rounded-lg" style={{ color: "rgba(52,211,153,0.4)" }}><X className="h-4 w-4" /></button>
+              </div>
+
+              {uploadPreviews.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                  {uploadPreviews.map((src, idx) => (
+                    <div key={idx} onClick={() => setPreviewModalIndex(idx)} className="relative shrink-0 h-16 w-16 rounded-lg overflow-hidden border cursor-pointer group active:scale-95 transition-all" style={{ borderColor: "rgba(16,185,129,0.3)" }} title="Click to preview">
+                      <img src={src} alt={`Screenshot ${idx + 1}`} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/35 transition-colors flex items-center justify-center pointer-events-none">
+                        <Eye className="h-3 w-3 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                      </div>
+                      <button onClick={(e) => { e.stopPropagation(); removeFile(idx); }} className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full flex items-center justify-center bg-black/80 hover:bg-red-600 text-white transition-all active:scale-90 z-10"><XIcon className="h-2.5 w-2.5" /></button>
+                      <span className="absolute bottom-0.5 left-0.5 text-[8px] font-bold px-0.5 rounded bg-black/60 text-white z-10 pointer-events-none">{idx + 1}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" id="ocr-file-input-add" />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessing}
+                className="w-full flex flex-col items-center justify-center gap-1.5 py-3.5 rounded-xl border-2 border-dashed transition-all active:scale-[0.98]"
+                style={{ borderColor: uploadFiles.length > 0 ? "rgba(16,185,129,0.3)" : "rgba(63,63,70,0.5)", background: uploadFiles.length > 0 ? "rgba(16,185,129,0.03)" : "rgba(24,24,27,0.3)" }}
+              >
+                <Upload className="h-4 w-4 text-emerald-400/70" />
+                <p className="text-[11px] font-semibold" style={{ color: uploadFiles.length > 0 ? "#34d399" : "rgba(161,161,170,0.8)" }}>
+                  {uploadFiles.length > 0 ? `${uploadFiles.length} screenshot${uploadFiles.length > 1 ? "s" : ""} added · tap to add more` : "Tap to add screenshots"}
+                </p>
+              </button>
+
+              {ocrError && (
+                <div className="px-3 py-2 rounded-lg text-xs" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#f87171" }}>{ocrError}</div>
+              )}
+
+              <button
+                onClick={handleOcrSubmit}
+                disabled={uploadFiles.length === 0 || isProcessing}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: isProcessing ? "rgba(16,185,129,0.3)" : "linear-gradient(135deg, #059669, #10b981)", boxShadow: isProcessing ? "none" : "0 4px 20px rgba(16,185,129,0.3)" }}
+              >
+                {isProcessing ? (<><Loader2 className="h-4 w-4 animate-spin" /> Processing…</>) : (<><ImageIcon className="h-4 w-4" /> Scan {uploadFiles.length} Screenshot{uploadFiles.length !== 1 ? "s" : ""}</>)}
+              </button>
+            </div>
+          )}
           <div className="space-y-3">
-            {/* Match selector pills */}
-            {matchesDetected > 1 && (
+            {/* Match selector pills + Add more pill */}
+            {matchesDetected > 0 && (
               <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollbarWidth: "none" }}>
-                <button onClick={() => setSelectedMatch(null)} className="shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all" style={selectedMatch === null ? { background: "linear-gradient(135deg,#7c3aed,#9333ea)", color: "#fff" } : { background: "rgba(124,58,237,0.12)", color: "rgba(167,139,250,0.7)", border: "1px solid rgba(124,58,237,0.2)" }}>All</button>
+                {matchesDetected > 1 && (
+                  <button onClick={() => setSelectedMatch(null)} className="shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all" style={selectedMatch === null ? { background: "linear-gradient(135deg,#7c3aed,#9333ea)", color: "#fff" } : { background: "rgba(124,58,237,0.12)", color: "rgba(167,139,250,0.7)", border: "1px solid rgba(124,58,237,0.2)" }}>All</button>
+                )}
                 {Array.from({ length: matchesDetected }, (_, i) => i + 1).map((mn) => (
                   <button key={mn} onClick={() => setSelectedMatch(mn)} className="shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all" style={selectedMatch === mn ? { background: "linear-gradient(135deg,#7c3aed,#9333ea)", color: "#fff" } : { background: "rgba(124,58,237,0.12)", color: "rgba(167,139,250,0.7)", border: "1px solid rgba(124,58,237,0.2)" }}>M{mn}</button>
                 ))}
+                {/* + Add matches pill */}
+                <button
+                  onClick={() => setShowAddMatches(!showAddMatches)}
+                  className="shrink-0 h-[30px] w-[30px] rounded-full flex items-center justify-center text-xs font-bold transition-all active:scale-90"
+                  style={showAddMatches
+                    ? { background: "linear-gradient(135deg, #059669, #10b981)", color: "#fff" }
+                    : { background: "rgba(16,185,129,0.12)", color: "#34d399", border: "1px solid rgba(16,185,129,0.25)" }
+                  }
+                  title="Add more matches"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
               </div>
             )}
 
@@ -226,6 +543,113 @@ export default function CalculateScreen({
           </>
         )}
       </div>
+
+      {/* ── Fullscreen Image Preview Lightbox ── */}
+      {previewModalIndex !== null && uploadPreviews[previewModalIndex] && (
+        <div
+          className="fixed inset-0 z-[120] flex flex-col items-center justify-between p-3 sm:p-5 bg-black/95 backdrop-blur-md select-none animate-in fade-in duration-200"
+          onClick={() => setPreviewModalIndex(null)}
+        >
+          {/* Top Bar */}
+          <div
+            className="w-full max-w-4xl flex items-center justify-between py-2 px-1 z-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold px-3 py-1 rounded-full bg-white/10 text-white/90 border border-white/10">
+                Screenshot {previewModalIndex + 1} of {uploadPreviews.length}
+              </span>
+              {uploadFiles[previewModalIndex]?.name && (
+                <span className="text-xs text-white/50 truncate max-w-[180px] sm:max-w-xs">
+                  {uploadFiles[previewModalIndex].name}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const idx = previewModalIndex;
+                  removeFile(idx);
+                }}
+                className="p-2 rounded-xl bg-red-500/15 hover:bg-red-500/30 text-red-400 hover:text-red-300 transition-colors"
+                title="Delete screenshot"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setPreviewModalIndex(null)}
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+                title="Close preview (Esc)"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Center Image with Prev / Next */}
+          <div
+            className="relative flex-1 w-full max-w-4xl flex items-center justify-center min-h-0 py-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {uploadPreviews.length > 1 && (
+              <button
+                onClick={() => setPreviewModalIndex((prev) => (prev! > 0 ? prev! - 1 : uploadPreviews.length - 1))}
+                className="absolute left-1 sm:left-3 top-1/2 -translate-y-1/2 p-2.5 sm:p-3 rounded-full bg-black/70 hover:bg-black/95 text-white border border-white/15 shadow-2xl transition-all active:scale-90 z-10"
+                title="Previous image (←)"
+              >
+                <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
+              </button>
+            )}
+
+            <img
+              src={uploadPreviews[previewModalIndex]}
+              alt={`Screenshot ${previewModalIndex + 1}`}
+              className="max-h-[75vh] max-w-[90vw] md:max-w-[80vw] object-contain rounded-xl shadow-2xl border border-white/10"
+            />
+
+            {uploadPreviews.length > 1 && (
+              <button
+                onClick={() => setPreviewModalIndex((prev) => (prev! < uploadPreviews.length - 1 ? prev! + 1 : 0))}
+                className="absolute right-1 sm:right-3 top-1/2 -translate-y-1/2 p-2.5 sm:p-3 rounded-full bg-black/70 hover:bg-black/95 text-white border border-white/15 shadow-2xl transition-all active:scale-90 z-10"
+                title="Next image (→)"
+              >
+                <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
+              </button>
+            )}
+          </div>
+
+          {/* Bottom Strip: thumbnail preview gallery & keyboard hint */}
+          <div
+            className="w-full max-w-4xl flex flex-col items-center gap-2 py-2 z-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {uploadPreviews.length > 1 && (
+              <div className="flex items-center gap-2 max-w-full overflow-x-auto px-2 py-1" style={{ scrollbarWidth: "none" }}>
+                {uploadPreviews.map((thumb, tIdx) => (
+                  <button
+                    key={tIdx}
+                    onClick={() => setPreviewModalIndex(tIdx)}
+                    className={`relative shrink-0 h-12 w-12 rounded-lg overflow-hidden border-2 transition-all ${
+                      tIdx === previewModalIndex
+                        ? "border-emerald-400 scale-105 shadow-lg shadow-emerald-500/25 ring-2 ring-emerald-400/30"
+                        : "border-white/10 opacity-50 hover:opacity-90"
+                    }`}
+                  >
+                    <img src={thumb} alt={`Thumbnail ${tIdx + 1}`} className="h-full w-full object-cover" />
+                    <span className="absolute bottom-0.5 right-0.5 text-[8px] font-bold px-1 rounded bg-black/70 text-white">
+                      {tIdx + 1}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-[10px] text-white/40 hidden sm:block">
+              Tip: Press <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono text-[9px]">Esc</kbd> to close · Use <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono text-[9px]">←</kbd> <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono text-[9px]">→</kbd> to switch screenshots
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

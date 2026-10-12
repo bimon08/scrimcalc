@@ -1,0 +1,915 @@
+{
+  "groups": [
+    {
+      "group": "BOM ROT",
+      "totals": {
+        "totalKills": 25,
+        "totalPoints": 40,
+        "chickenDinners": 1,
+        "lastMatchPosition": 11,
+        "totalPlacementPoints": 15
+      },
+      "matches": [
+        {
+          "match": 1,
+          "position": 1,
+          "teamKills": 13,
+          "matchPoints": 23,
+          "playerKills": {
+            "I'D WIN": 4,
+            "148xNICK": 4,
+            "TK2xREXZ": 1,
+            "4DExNinJaEST": 4
+          },
+          "placementPoints": 10
+        },
+        {
+          "match": 2,
+          "position": 8,
+          "teamKills": 4,
+          "matchPoints": 5,
+          "playerKills": {
+            "I'D WIN": 1,
+            "148xNICK": 2,
+            "TK2xREXZ": 0,
+            "4DExNinJaEST": 1
+          },
+          "placementPoints": 1
+        },
+        {
+          "match": 3,
+          "position": 4,
+          "teamKills": 6,
+          "matchPoints": 10,
+          "playerKills": {
+            "I'D WIN": 4,
+            "148xNICK": 1,
+            "TK2xREXZ": 0,
+            "4DExNinJaEST": 1
+          },
+          "placementPoints": 4
+        },
+        {
+          "match": 4,
+          "position": 11,
+          "teamKills": 2,
+          "matchPoints": 2,
+          "playerKills": {
+            "I'D WIN": 1,
+            "TK2xREXZ": 0,
+            "メBRONICK": 1,
+            "4DExNinJaEST": 0
+          },
+          "placementPoints": 0
+        }
+      ],
+      "players": [
+        "148xNICK",
+        "TK2xREXZ",
+        "I'D WIN",
+        "4DExNinJaEST",
+        "メBRONICK"
+      ]
+    },
+    {
+      "group": "unknown 2",
+      "totals": {
+        "totalKills": 8,
+        "totalPoints": 14,
+        "chickenDinners": 0,
+        "lastMatchPosition": 12,
+        "totalPlacementPoints": 6
+      },
+      "matches": [
+        {
+          "match": 1,
+          "position": 2,
+          "teamKills": 3,
+          "matchPoints": 9,
+          "playerKills": {
+            "DrunkB": 0,
+            "£NARUTOJRE": 2,
+            "『Theツ』X0007": 1
+          },
+          "placementPoints": 6
+        },
+        {
+          "match": 2,
+          "position": 9,
+          "teamKills": 0,
+          "matchPoints": 0,
+          "playerKills": {
+            "DrunkB": 0,
+            "callmeruit": 0,
+            "£NARUTOJRE": 0,
+            "『Theツ』X0007": 0
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 3,
+          "position": 10,
+          "teamKills": 4,
+          "matchPoints": 4,
+          "playerKills": {
+            "DrunkB": 0,
+            "callmeruit": 1,
+            "£NARUTOJRE": 2,
+            "『Theツ』X0007": 1
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 4,
+          "position": 12,
+          "teamKills": 1,
+          "matchPoints": 1,
+          "playerKills": {
+            "DrunkB": 1,
+            "callmeruit": 0,
+            "£NARUTOJRE": 0,
+            "『Theツ』X0007": 0
+          },
+          "placementPoints": 0
+        }
+      ],
+      "players": [
+        "DrunkB",
+        "£NARUTOJRE",
+        "『Theツ』X0007",
+        "callmeruit"
+      ]
+    },
+    {
+      "group": "TIAN ESPORT",
+      "totals": {
+        "totalKills": 23,
+        "totalPoints": 34,
+        "chickenDinners": 0,
+        "lastMatchPosition": 9,
+        "totalPlacementPoints": 11
+      },
+      "matches": [
+        {
+          "match": 1,
+          "position": 3,
+          "teamKills": 8,
+          "matchPoints": 13,
+          "playerKills": {
+            "Ruplibon박": 0,
+            "GDRxDESTRO12": 6,
+            "PokPokGAMING": 0,
+            "SHOTonTARGET": 2
+          },
+          "placementPoints": 5
+        },
+        {
+          "match": 2,
+          "position": 10,
+          "teamKills": 0,
+          "matchPoints": 0,
+          "playerKills": {
+            "Ruplibon박": 0,
+            "GDRxDESTRO12": 0,
+            "SHOTonTARGET": 0
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 3,
+          "position": 2,
+          "teamKills": 15,
+          "matchPoints": 21,
+          "playerKills": {
+            "Ruplibon박": 4,
+            "GDRxDESTRO12": 4,
+            "PokPokGAMING": 0,
+            "SHOTonTARGET": 7
+          },
+          "placementPoints": 6
+        },
+        {
+          "match": 4,
+          "position": 9,
+          "teamKills": 0,
+          "matchPoints": 0,
+          "playerKills": {
+            "Ruplibon박": 0,
+            "GDRxDESTRO12": 0,
+            "PokPokGAMING": 0,
+            "SHOTonTARGET": 0
+          },
+          "placementPoints": 0
+        }
+      ],
+      "players": [
+        "SHOTonTARGET",
+        "PokPokGAMING",
+        "Ruplibon박",
+        "GDRxDESTRO12"
+      ]
+    },
+    {
+      "group": "DRX GUY",
+      "totals": {
+        "totalKills": 14,
+        "totalPoints": 22,
+        "chickenDinners": 0,
+        "lastMatchPosition": 6,
+        "totalPlacementPoints": 8
+      },
+      "matches": [
+        {
+          "match": 1,
+          "position": 4,
+          "teamKills": 7,
+          "matchPoints": 11,
+          "playerKills": {
+            "60FPS\"ZORO": 1,
+            "TAG흥killmex": 2,
+            "GFP・TeN⋆⋆": 4,
+            "一M Y ▽ マ一IGL": 0
+          },
+          "placementPoints": 4
+        },
+        {
+          "match": 2,
+          "position": 7,
+          "teamKills": 1,
+          "matchPoints": 2,
+          "playerKills": {
+            "60FPS\"ZORO": 0,
+            "TAG흥killmex": 0,
+            "GFP・TeN⋆⋆": 0,
+            "一M Y ▽ マ一IGL": 1
+          },
+          "placementPoints": 1
+        },
+        {
+          "match": 3,
+          "position": 8,
+          "teamKills": 5,
+          "matchPoints": 6,
+          "playerKills": {
+            "60FPS\"ZORO": 2,
+            "TAG흥killmex": 1,
+            "GFP・TeN⋆⋆": 1,
+            "一M Y ▽ マ一IGL": 1
+          },
+          "placementPoints": 1
+        },
+        {
+          "match": 4,
+          "position": 6,
+          "teamKills": 1,
+          "matchPoints": 3,
+          "playerKills": {
+            "60FPS\"ZORO": 0,
+            "TAG흥killmex": 0,
+            "GFP・TeN⋆⋆": 0,
+            "一M Y ▽ マ一IGL": 1
+          },
+          "placementPoints": 2
+        }
+      ],
+      "players": [
+        "60FPS\"ZORO",
+        "TAG흥killmex",
+        "一M Y ▽ マ一IGL",
+        "GFP・TeN⋆⋆"
+      ]
+    },
+    {
+      "group": "777s",
+      "totals": {
+        "totalKills": 36,
+        "totalPoints": 65,
+        "chickenDinners": 2,
+        "lastMatchPosition": 1,
+        "totalPlacementPoints": 29
+      },
+      "matches": [
+        {
+          "match": 1,
+          "position": 5,
+          "teamKills": 0,
+          "matchPoints": 3,
+          "playerKills": {
+            "777sDawann": 0,
+            "777sFallen": 0
+          },
+          "placementPoints": 3
+        },
+        {
+          "match": 2,
+          "position": 2,
+          "teamKills": 10,
+          "matchPoints": 16,
+          "playerKills": {
+            "777sDawann": 2,
+            "777sFallen": 1,
+            "777sL0RENZ0": 5,
+            "EatFuckAndFLY": 2
+          },
+          "placementPoints": 6
+        },
+        {
+          "match": 3,
+          "position": 1,
+          "teamKills": 17,
+          "matchPoints": 27,
+          "playerKills": {
+            "777sDawann": 1,
+            "777sFallen": 3,
+            "777sL0RENZ0": 5,
+            "EatFuckAndFLY": 8
+          },
+          "placementPoints": 10
+        },
+        {
+          "match": 4,
+          "position": 1,
+          "teamKills": 9,
+          "matchPoints": 19,
+          "playerKills": {
+            "777sDawann": 2,
+            "777sFallen": 2,
+            "777sL0RENZ0": 2,
+            "EatFuckAndFLY": 3
+          },
+          "placementPoints": 10
+        }
+      ],
+      "players": [
+        "777sDawann",
+        "777sFallen",
+        "EatFuckAndFLY",
+        "777sL0RENZ0"
+      ]
+    },
+    {
+      "group": "Rock&Roll",
+      "totals": {
+        "totalKills": 18,
+        "totalPoints": 31,
+        "chickenDinners": 1,
+        "lastMatchPosition": 7,
+        "totalPlacementPoints": 13
+      },
+      "matches": [
+        {
+          "match": 1,
+          "position": 6,
+          "teamKills": 0,
+          "matchPoints": 2,
+          "playerKills": {
+            "4BxDARYL": 0,
+            "彡EMINEM×": 0,
+            "亗RIMIKI亗": 0,
+            "TAGXXItJustMe7": 0
+          },
+          "placementPoints": 2
+        },
+        {
+          "match": 2,
+          "position": 1,
+          "teamKills": 9,
+          "matchPoints": 19,
+          "playerKills": {
+            "4BxDARYL": 3,
+            "彡EMINEM×": 3,
+            "亗RIMIKI亗": 2,
+            "TAGXXItJustMe7": 1
+          },
+          "placementPoints": 10
+        },
+        {
+          "match": 3,
+          "position": 11,
+          "teamKills": 4,
+          "matchPoints": 4,
+          "playerKills": {
+            "4BxDARYL": 1,
+            "彡EMINEM×": 0,
+            "亗RIMIKI亗": 2,
+            "TAGXXItJustMe7": 1
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 4,
+          "position": 7,
+          "teamKills": 5,
+          "matchPoints": 6,
+          "playerKills": {
+            "4BxDARYL": 2,
+            "彡EMINEM×": 2,
+            "亗RIMIKI亗": 0,
+            "TAGXXItJustMe7": 1
+          },
+          "placementPoints": 1
+        }
+      ],
+      "players": [
+        "彡EMINEM×",
+        "4BxDARYL",
+        "亗RIMIKI亗",
+        "TAGXXItJustMe7"
+      ]
+    },
+    {
+      "group": "unknown",
+      "totals": {
+        "totalKills": 35,
+        "totalPoints": 45,
+        "chickenDinners": 0,
+        "lastMatchPosition": 5,
+        "totalPlacementPoints": 10
+      },
+      "matches": [
+        {
+          "match": 1,
+          "position": 7,
+          "teamKills": 8,
+          "matchPoints": 9,
+          "playerKills": {
+            "Z I K O": 4,
+            "kitxbok": 1,
+            "EXTREME×07": 1,
+            "EKIxVORNYXx7": 2
+          },
+          "placementPoints": 1
+        },
+        {
+          "match": 2,
+          "position": 5,
+          "teamKills": 7,
+          "matchPoints": 10,
+          "playerKills": {
+            "Z I K O": 6,
+            "kitxbok": 0,
+            "EXTREME×07": 0,
+            "EKIxVORNYXx7": 1
+          },
+          "placementPoints": 3
+        },
+        {
+          "match": 3,
+          "position": 5,
+          "teamKills": 11,
+          "matchPoints": 14,
+          "playerKills": {
+            "Z I K O": 6,
+            "EXTREME×07": 0,
+            "EKIxVORNYXx7": 3,
+            "bamdohsyiar88": 2
+          },
+          "placementPoints": 3
+        },
+        {
+          "match": 4,
+          "position": 5,
+          "teamKills": 9,
+          "matchPoints": 12,
+          "playerKills": {
+            "Z I K O": 4,
+            "EXTREME×07": 0,
+            "EKIxVORNYXx7": 4,
+            "bamdohsyiar88": 1
+          },
+          "placementPoints": 3
+        }
+      ],
+      "players": [
+        "EXTREME×07",
+        "kitxbok",
+        "Z I K O",
+        "EKIxVORNYXx7",
+        "bamdohsyiar88"
+      ]
+    },
+    {
+      "group": "PARTIT",
+      "totals": {
+        "totalKills": 4,
+        "totalPoints": 5,
+        "chickenDinners": 0,
+        "lastMatchPosition": 13,
+        "totalPlacementPoints": 1
+      },
+      "matches": [
+        {
+          "match": 1,
+          "position": 8,
+          "teamKills": 0,
+          "matchPoints": 1,
+          "playerKills": {
+            "Goblïnd": 0,
+            "Kyndit×Tmoh": 0,
+            "LehkaipathAr": 0,
+            "Pw×Bahkthang": 0
+          },
+          "placementPoints": 1
+        },
+        {
+          "match": 2,
+          "position": 12,
+          "teamKills": 4,
+          "matchPoints": 4,
+          "playerKills": {
+            "Goblïnd": 2,
+            "Kyndit×Tmoh": 0,
+            "LehkaipathAr": 2,
+            "Pw×Bahkthang": 0
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 3,
+          "position": 13,
+          "teamKills": 0,
+          "matchPoints": 0,
+          "playerKills": {
+            "Goblïnd": 0,
+            "Kyndit×Tmoh": 0,
+            "LehkaipathAr": 0,
+            "TK2xKolisTheOG": 0
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 4,
+          "position": 13,
+          "teamKills": 0,
+          "matchPoints": 0,
+          "playerKills": {
+            "Goblïnd": 0,
+            "Kyndit×Tmoh": 0,
+            "LehkaipathAr": 0
+          },
+          "placementPoints": 0
+        }
+      ],
+      "players": [
+        "Pw×Bahkthang",
+        "Kyndit×Tmoh",
+        "LehkaipathAr",
+        "Goblïnd",
+        "TK2xKolisTheOG"
+      ]
+    },
+    {
+      "group": "GOAT",
+      "totals": {
+        "totalKills": 17,
+        "totalPoints": 28,
+        "chickenDinners": 0,
+        "lastMatchPosition": 4,
+        "totalPlacementPoints": 11
+      },
+      "matches": [
+        {
+          "match": 1,
+          "position": 9,
+          "teamKills": 0,
+          "matchPoints": 0,
+          "playerKills": {
+            "♕AXEツ": 0,
+            "KŚツBallam": 0,
+            "戦Gun N Rose": 0,
+            "MESSI→THEGOAT": 0
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 2,
+          "position": 6,
+          "teamKills": 3,
+          "matchPoints": 5,
+          "playerKills": {
+            "♕AXEツ": 0,
+            "KŚツBallam": 2,
+            "戦Gun N Rose": 0,
+            "MESSI→THEGOAT": 1
+          },
+          "placementPoints": 2
+        },
+        {
+          "match": 3,
+          "position": 3,
+          "teamKills": 9,
+          "matchPoints": 14,
+          "playerKills": {
+            "♕AXEツ": 3,
+            "KŚツBallam": 5,
+            "戦Gun N Rose": 0,
+            "MESSI→THEGOAT": 1
+          },
+          "placementPoints": 5
+        },
+        {
+          "match": 4,
+          "position": 4,
+          "teamKills": 5,
+          "matchPoints": 9,
+          "playerKills": {
+            "♕AXEツ": 0,
+            "KŚツBallam": 2,
+            "戦Gun N Rose": 3,
+            "MESSI→THEGOAT": 0
+          },
+          "placementPoints": 4
+        }
+      ],
+      "players": [
+        "♕AXEツ",
+        "MESSI→THEGOAT",
+        "戦Gun N Rose",
+        "KŚツBallam"
+      ]
+    },
+    {
+      "group": "mukhla  esport",
+      "totals": {
+        "totalKills": 22,
+        "totalPoints": 32,
+        "chickenDinners": 0,
+        "lastMatchPosition": 2,
+        "totalPlacementPoints": 10
+      },
+      "matches": [
+        {
+          "match": 1,
+          "position": 10,
+          "teamKills": 5,
+          "matchPoints": 5,
+          "playerKills": {
+            "~Dakaid": 2,
+            "Eren—16": 0,
+            "ㆍVICKYRUㆍ7": 1,
+            "AlpineツVortex": 2
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 2,
+          "position": 4,
+          "teamKills": 4,
+          "matchPoints": 8,
+          "playerKills": {
+            "~Dakaid": 1,
+            "Psychø BøY": 1,
+            "ㆍVICKYRUㆍ7": 1,
+            "AlpineツVortex": 1
+          },
+          "placementPoints": 4
+        },
+        {
+          "match": 3,
+          "position": 9,
+          "teamKills": 5,
+          "matchPoints": 5,
+          "playerKills": {
+            "Psychø BøY": 2,
+            "ㆍVICKYRUㆍ7": 0,
+            "AlpineツVortex": 1,
+            "xx | JOWAi | 17": 2
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 4,
+          "position": 2,
+          "teamKills": 8,
+          "matchPoints": 14,
+          "playerKills": {
+            "~Dakaid": 1,
+            "ㆍLYNG'zㆍ17": 3,
+            "ㆍVICKYRUㆍ7": 1,
+            "AlpineツVortex": 3
+          },
+          "placementPoints": 6
+        }
+      ],
+      "players": [
+        "Eren—16",
+        "AlpineツVortex",
+        "~Dakaid",
+        "ㆍVICKYRUㆍ7",
+        "Psychø BøY",
+        "xx | JOWAi | 17",
+        "ㆍLYNG'zㆍ17"
+      ]
+    },
+    {
+      "group": "9HUMAN",
+      "totals": {
+        "totalKills": 6,
+        "totalPoints": 13,
+        "chickenDinners": 0,
+        "lastMatchPosition": 3,
+        "totalPlacementPoints": 7
+      },
+      "matches": [
+        {
+          "match": 1,
+          "position": 11,
+          "teamKills": 1,
+          "matchPoints": 1,
+          "playerKills": {
+            "9HUMAN99": 0,
+            "DANTE×D": 1,
+            "Saaaaalt": 0,
+            "月Buaid": 0
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 2,
+          "position": 13,
+          "teamKills": 0,
+          "matchPoints": 0,
+          "playerKills": {
+            "9HUMAN99": 0,
+            "DANTE×D": 0,
+            "Saaaaalt": 0,
+            "月Buaid": 0
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 3,
+          "position": 6,
+          "teamKills": 3,
+          "matchPoints": 5,
+          "playerKills": {
+            "9HUMAN99": 0,
+            "DANTE×D": 0,
+            "Saaaaalt": 2,
+            "月Buaid": 1
+          },
+          "placementPoints": 2
+        },
+        {
+          "match": 4,
+          "position": 3,
+          "teamKills": 2,
+          "matchPoints": 7,
+          "playerKills": {
+            "9HUMAN99": 1,
+            "月Buaid": 1
+          },
+          "placementPoints": 5
+        }
+      ],
+      "players": [
+        "9HUMAN99",
+        "Saaaaalt",
+        "DANTE×D",
+        "月Buaid"
+      ]
+    },
+    {
+      "group": "Team A",
+      "totals": {
+        "totalKills": 3,
+        "totalPoints": 3,
+        "chickenDinners": 0,
+        "lastMatchPosition": 10,
+        "totalPlacementPoints": 0
+      },
+      "matches": [
+        {
+          "match": 1,
+          "position": 12,
+          "teamKills": 1,
+          "matchPoints": 1,
+          "playerKills": {
+            "BOWRAi": 0,
+            "RKO Orton": 0,
+            "CYTHER GANG": 0,
+            "Ready • To • Die": 1
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 2,
+          "position": 11,
+          "teamKills": 0,
+          "matchPoints": 0,
+          "playerKills": {
+            "BOWRAi": 0,
+            "RKO Orton": 0,
+            "CYTHERgang": 0,
+            "Ready • To • Die": 0
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 3,
+          "position": 12,
+          "teamKills": 2,
+          "matchPoints": 2,
+          "playerKills": {
+            "BOWRAi": 2,
+            "RKO Orton": 0,
+            "CYTHERgang": 0,
+            "Ready • To • Die": 0
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 4,
+          "position": 10,
+          "teamKills": 0,
+          "matchPoints": 0,
+          "playerKills": {
+            "BOWRAi": 0,
+            "RKO Orton": 0,
+            "CYTHERgang": 0,
+            "Ready • To • Die": 0
+          },
+          "placementPoints": 0
+        }
+      ],
+      "players": [
+        "Ready • To • Die",
+        "RKO Orton",
+        "BOWRAi",
+        "CYTHER GANG",
+        "CYTHERgang"
+      ]
+    },
+    {
+      "group": "TAG",
+      "totals": {
+        "totalKills": 10,
+        "totalPoints": 17,
+        "chickenDinners": 0,
+        "lastMatchPosition": 8,
+        "totalPlacementPoints": 7
+      },
+      "matches": [
+        {
+          "match": 1,
+          "position": 13,
+          "teamKills": 0,
+          "matchPoints": 0,
+          "playerKills": {
+            "KlxViper": 0,
+            "OGNOOBKING": 0,
+            "khon ioh Mon": 0,
+            "Bahメthnum〆L": 0
+          },
+          "placementPoints": 0
+        },
+        {
+          "match": 2,
+          "position": 3,
+          "teamKills": 3,
+          "matchPoints": 8,
+          "playerKills": {
+            "KlxViper": 2,
+            "OGNOOBKING": 0,
+            "khon ioh Mon": 0,
+            "Bahメthnum〆L": 1
+          },
+          "placementPoints": 5
+        },
+        {
+          "match": 3,
+          "position": 7,
+          "teamKills": 7,
+          "matchPoints": 8,
+          "playerKills": {
+            "KlxViper": 1,
+            "OGNOOBKING": 3,
+            "khon ioh Mon": 1,
+            "Bahメthnum〆L": 2
+          },
+          "placementPoints": 1
+        },
+        {
+          "match": 4,
+          "position": 8,
+          "teamKills": 0,
+          "matchPoints": 1,
+          "playerKills": {
+            "KlxViper": 0,
+            "OGNOOBKING": 0,
+            "khon ioh Mon": 0,
+            "Bahメthnum〆L": 0
+          },
+          "placementPoints": 1
+        }
+      ],
+      "players": [
+        "KlxViper",
+        "khon ioh Mon",
+        "OGNOOBKING",
+        "Bahメthnum〆L"
+      ]
+    }
+  ],
+  "matches_detected": 4
+}

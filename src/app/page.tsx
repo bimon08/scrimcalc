@@ -509,9 +509,6 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
     const updated = { ...tournament, teams: enrichedTeams, geminiData: data, assignments: autoAssignments };
     save(updated);
     recomputeStandings(updated);
-    const autoCount = Object.keys(autoAssignments).length;
-    const enriched = enrichedTeams.filter((t, i) => t !== tournament.teams[i]).length;
-    toast.success(`${data.groups.length} groups · ${data.matches_detected} matches · ${autoCount} assigned${enriched ? ` · ${enriched} rosters updated` : ""}`);
   };
 
   /** Accumulate: merge new matches into existing data */
@@ -525,9 +522,6 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
     const updated = { ...tournament, teams: enrichedTeams, geminiData: merged, assignments: autoAssignments };
     save(updated);
     recomputeStandings(updated);
-    const existingCount = tournament.geminiData.matches_detected;
-    const newCount = merged.matches_detected - existingCount;
-    toast.success(`Added ${newCount} new matches (M${existingCount + 1}–M${merged.matches_detected}) · ${merged.matches_detected} total`);
     setPendingPasteData(null);
   };
 
@@ -875,6 +869,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
           onUnassignTeam={unassignTeam}
           onCopyPrompt={copyPrompt}
           onPasteJson={pasteJson}
+          onOcrResult={(json: string) => processJson(json)}
           onClearData={() => {
             if (!tournament) return;
             const updated = { ...tournament, geminiData: undefined, assignments: {} };
@@ -884,6 +879,7 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
           onClose={() => closeOverlay(() => setShowStats(false))}
         />
       )}
+
 
       {/* SLOTS MODAL */}
       {showSlots && tournament && (

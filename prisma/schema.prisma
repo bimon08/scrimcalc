@@ -87,3 +87,21 @@ model SlotBooking {
   @@unique([walletId, tournamentId])
   @@map("slot_bookings")
 }
+
+model ApiUsage {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  userEmail     String   @map("user_email")
+  model         String                          // e.g. "gemini-3.8-flash"
+  imageCount    Int      @map("image_count")
+  inputTokens   Int      @default(0) @map("input_tokens")
+  outputTokens  Int      @default(0) @map("output_tokens")
+  durationMs    Int      @default(0) @map("duration_ms")
+  status        String   @default("success")    // "success" | "error"
+  errorMessage  String?  @map("error_message")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("api_usage")
+}
