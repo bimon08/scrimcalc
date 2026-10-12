@@ -20,12 +20,13 @@ interface Props {
   onClearData: () => void;
   onClose: () => void;
   onOcrResult?: (json: string) => void;
+  isAdmin?: boolean;
 }
 
 export default function CalculateScreen({
   tournament, groups, assignments, matchesDetected, groupFilter, setGroupFilter,
   onAssignTeam, onUnassignTeam, onCopyPrompt, onPasteJson, onClearData, onClose,
-  onOcrResult,
+  onOcrResult, isAdmin = false,
 }: Props) {
   const [selectedMatch, setSelectedMatch] = useState<number | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -216,41 +217,43 @@ export default function CalculateScreen({
         {groups.length === 0 ? (
           /* ── Empty state: Tabbed UI ── */
           <div className="mt-2 px-1">
-            {/* Tab bar */}
-            <div className="flex rounded-xl p-1 mb-4" style={{ background: "rgba(24,24,27,0.6)", border: "1px solid rgba(63,63,70,0.3)" }}>
-              <button
-                onClick={() => setCalcTab("auto")}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all"
-                style={calcTab === "auto"
-                  ? { background: "linear-gradient(135deg, #059669, #10b981)", color: "#fff", boxShadow: "0 2px 12px rgba(16,185,129,0.3)" }
-                  : { color: "rgba(52,211,153,0.5)" }
-                }
-              >
-                <Camera className="h-3.5 w-3.5" />
-                <span>Auto Scan</span>
-                <span
-                  className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wider leading-none"
+            {/* Tab bar (only shown if admin) */}
+            {isAdmin && (
+              <div className="flex rounded-xl p-1 mb-4" style={{ background: "rgba(24,24,27,0.6)", border: "1px solid rgba(63,63,70,0.3)" }}>
+                <button
+                  onClick={() => setCalcTab("auto")}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all"
                   style={calcTab === "auto"
-                    ? { background: "rgba(0,0,0,0.25)", color: "#d1fae5" }
-                    : { background: "rgba(16,185,129,0.15)", color: "rgba(52,211,153,0.7)" }
+                    ? { background: "linear-gradient(135deg, #059669, #10b981)", color: "#fff", boxShadow: "0 2px 12px rgba(16,185,129,0.3)" }
+                    : { color: "rgba(52,211,153,0.5)" }
                   }
                 >
-                  Beta
-                </span>
-              </button>
-              <button
-                onClick={() => setCalcTab("manual")}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all"
-                style={calcTab === "manual"
-                  ? { background: "linear-gradient(135deg,#7c3aed,#9333ea)", color: "#fff", boxShadow: "0 2px 12px rgba(124,58,237,0.3)" }
-                  : { color: "rgba(167,139,250,0.5)" }
-                }
-              >
-                <ClipboardPaste className="h-3.5 w-3.5" /> Manual
-              </button>
-            </div>
+                  <Camera className="h-3.5 w-3.5" />
+                  <span>Auto Scan</span>
+                  <span
+                    className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wider leading-none"
+                    style={calcTab === "auto"
+                      ? { background: "rgba(0,0,0,0.25)", color: "#d1fae5" }
+                      : { background: "rgba(16,185,129,0.15)", color: "rgba(52,211,153,0.7)" }
+                    }
+                  >
+                    Beta
+                  </span>
+                </button>
+                <button
+                  onClick={() => setCalcTab("manual")}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all"
+                  style={calcTab === "manual"
+                    ? { background: "linear-gradient(135deg,#7c3aed,#9333ea)", color: "#fff", boxShadow: "0 2px 12px rgba(124,58,237,0.3)" }
+                    : { color: "rgba(167,139,250,0.5)" }
+                  }
+                >
+                  <ClipboardPaste className="h-3.5 w-3.5" /> Manual
+                </button>
+              </div>
+            )}
 
-            {calcTab === "manual" ? (
+            {!isAdmin || calcTab === "manual" ? (
               /* ── Manual tab ── */
               <div className="w-full rounded-2xl p-4" style={{ background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.25)" }}>
                 <div className="flex items-center gap-3 mb-4">
@@ -442,18 +445,20 @@ export default function CalculateScreen({
                 {Array.from({ length: matchesDetected }, (_, i) => i + 1).map((mn) => (
                   <button key={mn} onClick={() => setSelectedMatch(mn)} className="shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all" style={selectedMatch === mn ? { background: "linear-gradient(135deg,#7c3aed,#9333ea)", color: "#fff" } : { background: "rgba(124,58,237,0.12)", color: "rgba(167,139,250,0.7)", border: "1px solid rgba(124,58,237,0.2)" }}>M{mn}</button>
                 ))}
-                {/* + Add matches pill */}
-                <button
-                  onClick={() => setShowAddMatches(!showAddMatches)}
-                  className="shrink-0 h-[30px] w-[30px] rounded-full flex items-center justify-center text-xs font-bold transition-all active:scale-90"
-                  style={showAddMatches
-                    ? { background: "linear-gradient(135deg, #059669, #10b981)", color: "#fff" }
-                    : { background: "rgba(16,185,129,0.12)", color: "#34d399", border: "1px solid rgba(16,185,129,0.25)" }
-                  }
-                  title="Add more matches"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
+                {/* + Add matches pill (only shown if admin) */}
+                {isAdmin && (
+                  <button
+                    onClick={() => setShowAddMatches(!showAddMatches)}
+                    className="shrink-0 h-[30px] w-[30px] rounded-full flex items-center justify-center text-xs font-bold transition-all active:scale-90"
+                    style={showAddMatches
+                      ? { background: "linear-gradient(135deg, #059669, #10b981)", color: "#fff" }
+                      : { background: "rgba(16,185,129,0.12)", color: "#34d399", border: "1px solid rgba(16,185,129,0.25)" }
+                    }
+                    title="Add more matches"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             )}
 
