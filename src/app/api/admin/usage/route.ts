@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/../auth";
+import { auth } from "@root/auth";
 import { prisma } from "@/lib/prisma";
 
 const ADMIN_EMAIL = "bimonlangnongsiej@gmail.com";
 
 /** GET /api/admin/usage — get API usage statistics (admin only) */
 export async function GET(req: Request) {
-  const session = await auth();
-  if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+  try {
+    const session = await auth();
+    if (!session?.user?.email || session.user.email !== ADMIN_EMAIL) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
 
   const url = new URL(req.url);
   const days = parseInt(url.searchParams.get("days") || "30", 10);
@@ -123,4 +124,9 @@ export async function GET(req: Request) {
     daily,
     recent,
   });
+  } catch (err: unknown) {
+    console.error("Admin usage API error:", err);
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

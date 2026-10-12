@@ -945,7 +945,6 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
             toast.success("Match data cleared");
           }}
           onClose={() => closeOverlay(() => setShowStats(false))}
-          isAdmin={sub.isAdmin}
         />
       )}
 

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Trash2, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ClipboardPaste, Trophy, Upload, Camera, Loader2, ImageIcon, X as XIcon, Eye, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Tournament, AssignedGroup, StandingRow, DEFAULT_BGMI_POINTS, Team } from "@/lib/types";
@@ -141,13 +141,13 @@ interface Props {
   onClearData: () => void;
   onClose: () => void;
   onOcrResult?: (json: string) => void;
-  isAdmin?: boolean;
+
 }
 
 export default function CalculateScreen({
   tournament, groups, assignments, matchesDetected, groupFilter, setGroupFilter,
   onAssignTeam, onUnassignTeam, onCopyPrompt, onPasteJson, onClearData, onClose,
-  onOcrResult, isAdmin = false,
+  onOcrResult,
 }: Props) {
   const [selectedMatch, setSelectedMatch] = useState<number | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -163,6 +163,47 @@ export default function CalculateScreen({
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [showAddMatches, setShowAddMatches] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  // ── Screen Wake Lock + beforeunload guard while processing ──
+  const releaseWakeLock = useCallback(async () => {
+    if (wakeLockRef.current) {
+      try { await wakeLockRef.current.release(); } catch { /* ignore */ }
+      wakeLockRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isProcessing) {
+      releaseWakeLock();
+      return;
+    }
+
+    // Request Wake Lock to keep screen on during scan
+    let cancelled = false;
+    (async () => {
+      try {
+        if ("wakeLock" in navigator) {
+          const lock = await navigator.wakeLock.request("screen");
+          if (cancelled) { lock.release(); return; }
+          wakeLockRef.current = lock;
+        }
+      } catch { /* Wake Lock not supported or denied — non-critical */ }
+    })();
+
+    // Warn user if they try to leave/close while processing
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      cancelled = true;
+      releaseWakeLock();
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isProcessing, releaseWakeLock]);
+
 
   const toggleExpand = (g: string) => setExpandedGroups(p => { const n = new Set(p); n.has(g) ? n.delete(g) : n.add(g); return n; });
   const assignedTeamIds = new Set(Object.values(assignments));
@@ -405,43 +446,41 @@ export default function CalculateScreen({
         {groups.length === 0 ? (
           /* ── Empty state: Tabbed UI ── */
           <div className="mt-2 px-1">
-            {/* Tab bar (only shown if admin) */}
-            {isAdmin && (
-              <div className="flex rounded-xl p-1 mb-4" style={{ background: "rgba(24,24,27,0.6)", border: "1px solid rgba(63,63,70,0.3)" }}>
-                <button
-                  onClick={() => setCalcTab("auto")}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all"
+            {/* Tab bar */}
+            <div className="flex rounded-xl p-1 mb-4" style={{ background: "rgba(24,24,27,0.6)", border: "1px solid rgba(63,63,70,0.3)" }}>
+              <button
+                onClick={() => setCalcTab("auto")}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all"
+                style={calcTab === "auto"
+                  ? { background: "linear-gradient(135deg, #059669, #10b981)", color: "#fff", boxShadow: "0 2px 12px rgba(16,185,129,0.3)" }
+                  : { color: "rgba(52,211,153,0.5)" }
+                }
+              >
+                <Camera className="h-3.5 w-3.5" />
+                <span>Auto Scan</span>
+                <span
+                  className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wider leading-none"
                   style={calcTab === "auto"
-                    ? { background: "linear-gradient(135deg, #059669, #10b981)", color: "#fff", boxShadow: "0 2px 12px rgba(16,185,129,0.3)" }
-                    : { color: "rgba(52,211,153,0.5)" }
+                    ? { background: "rgba(0,0,0,0.25)", color: "#d1fae5" }
+                    : { background: "rgba(16,185,129,0.15)", color: "rgba(52,211,153,0.7)" }
                   }
                 >
-                  <Camera className="h-3.5 w-3.5" />
-                  <span>Auto Scan</span>
-                  <span
-                    className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wider leading-none"
-                    style={calcTab === "auto"
-                      ? { background: "rgba(0,0,0,0.25)", color: "#d1fae5" }
-                      : { background: "rgba(16,185,129,0.15)", color: "rgba(52,211,153,0.7)" }
-                    }
-                  >
-                    Beta
-                  </span>
-                </button>
-                <button
-                  onClick={() => setCalcTab("manual")}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all"
-                  style={calcTab === "manual"
-                    ? { background: "linear-gradient(135deg,#7c3aed,#9333ea)", color: "#fff", boxShadow: "0 2px 12px rgba(124,58,237,0.3)" }
-                    : { color: "rgba(167,139,250,0.5)" }
-                  }
-                >
-                  <ClipboardPaste className="h-3.5 w-3.5" /> Manual
-                </button>
-              </div>
-            )}
+                  Beta
+                </span>
+              </button>
+              <button
+                onClick={() => setCalcTab("manual")}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all"
+                style={calcTab === "manual"
+                  ? { background: "linear-gradient(135deg,#7c3aed,#9333ea)", color: "#fff", boxShadow: "0 2px 12px rgba(124,58,237,0.3)" }
+                  : { color: "rgba(167,139,250,0.5)" }
+                }
+              >
+                <ClipboardPaste className="h-3.5 w-3.5" /> Manual
+              </button>
+            </div>
 
-            {!isAdmin || calcTab === "manual" ? (
+            {calcTab === "manual" ? (
               /* ── Manual tab ── */
               <div className="w-full rounded-2xl p-4" style={{ background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.25)" }}>
                 <div className="flex items-center gap-3 mb-4">
@@ -556,7 +595,11 @@ export default function CalculateScreen({
                   {isProcessing ? (<><Loader2 className="h-4 w-4 animate-spin" /> Processing with AI…</>) : (<><ImageIcon className="h-4 w-4" /> Scan {uploadFiles.length} Screenshot{uploadFiles.length !== 1 ? "s" : ""}</>)}
                 </button>
 
-
+                {isProcessing && (
+                  <p className="text-[10px] text-center animate-pulse" style={{ color: "rgba(52,211,153,0.5)" }}>
+                    📱 Please keep screen on while processing…
+                  </p>
+                )}
 
                 <p className="text-[10px] text-center" style={{ color: "rgba(52,211,153,0.3)" }}>Screenshots are processed by Gemini AI · no data stored</p>
               </div>
@@ -621,6 +664,12 @@ export default function CalculateScreen({
               >
                 {isProcessing ? (<><Loader2 className="h-4 w-4 animate-spin" /> Processing…</>) : (<><ImageIcon className="h-4 w-4" /> Scan {uploadFiles.length} Screenshot{uploadFiles.length !== 1 ? "s" : ""}</>)}
               </button>
+
+              {isProcessing && (
+                <p className="text-[10px] text-center animate-pulse" style={{ color: "rgba(52,211,153,0.5)" }}>
+                  📱 Please keep screen on while processing…
+                </p>
+              )}
             </div>
           )}
           <div className="space-y-3">
@@ -633,20 +682,18 @@ export default function CalculateScreen({
                 {Array.from({ length: matchesDetected }, (_, i) => i + 1).map((mn) => (
                   <button key={mn} onClick={() => setSelectedMatch(mn)} className="shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all" style={selectedMatch === mn ? { background: "linear-gradient(135deg,#7c3aed,#9333ea)", color: "#fff" } : { background: "rgba(124,58,237,0.12)", color: "rgba(167,139,250,0.7)", border: "1px solid rgba(124,58,237,0.2)" }}>M{mn}</button>
                 ))}
-                {/* + Add matches pill (only shown if admin) */}
-                {isAdmin && (
-                  <button
-                    onClick={() => setShowAddMatches(!showAddMatches)}
-                    className="shrink-0 h-[30px] w-[30px] rounded-full flex items-center justify-center text-xs font-bold transition-all active:scale-90"
-                    style={showAddMatches
-                      ? { background: "linear-gradient(135deg, #059669, #10b981)", color: "#fff" }
-                      : { background: "rgba(16,185,129,0.12)", color: "#34d399", border: "1px solid rgba(16,185,129,0.25)" }
-                    }
-                    title="Add more matches"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                )}
+                {/* + Add matches pill */}
+                <button
+                  onClick={() => setShowAddMatches(!showAddMatches)}
+                  className="shrink-0 h-[30px] w-[30px] rounded-full flex items-center justify-center text-xs font-bold transition-all active:scale-90"
+                  style={showAddMatches
+                    ? { background: "linear-gradient(135deg, #059669, #10b981)", color: "#fff" }
+                    : { background: "rgba(16,185,129,0.12)", color: "#34d399", border: "1px solid rgba(16,185,129,0.25)" }
+                  }
+                  title="Add more matches"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
               </div>
             )}
 

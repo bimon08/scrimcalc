@@ -21,14 +21,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Get email and role for admin check & usage tracking
-  const { auth: getAuth } = await import("@root/auth");
-  const session = await getAuth();
-  if (session?.user?.role !== "ADMIN") {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-  }
 
-  const userEmail = session?.user?.email ?? "unknown";
+  const userEmail = caller.userId ?? "unknown";
 
   // Support multiple API keys (comma-separated) for rotation on rate limits
   const apiKeys = (process.env.GEMINI_API_KEYS || process.env.GOOGLE_GEMINI_API_KEY || "")
