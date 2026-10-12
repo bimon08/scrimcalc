@@ -160,6 +160,7 @@ export default function CalculateScreen({
   const [uploadPreviews, setUploadPreviews] = useState<string[]>([]);
   const [previewModalIndex, setPreviewModalIndex] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processStage, setProcessStage] = useState("");
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [showAddMatches, setShowAddMatches] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -298,6 +299,7 @@ export default function CalculateScreen({
       return;
     }
     setIsProcessing(true);
+    setProcessStage("Connecting…");
     setOcrError(null);
 
     const startTime = Date.now();
@@ -316,6 +318,7 @@ export default function CalculateScreen({
       const prompt = buildDirectPrompt(activeTeams);
 
       // 3. Convert images to base64
+      setProcessStage(`Preparing ${uploadFiles.length} image${uploadFiles.length > 1 ? "s" : ""}…`);
       const imageParts = await Promise.all(
         uploadFiles.map(async (file) => {
           const prepared = await prepareImage(file);
@@ -333,6 +336,7 @@ export default function CalculateScreen({
       });
 
       // 4. Call Gemini directly from browser (uses user's residential IP, not Vercel's)
+      setProcessStage("Uploading to AI…");
       let geminiResult: Record<string, unknown> | null = null;
       let usedModel = models[0];
 
@@ -349,6 +353,7 @@ export default function CalculateScreen({
             });
 
             if (res.ok) {
+              setProcessStage("Reading scoreboards…");
               geminiResult = await res.json();
               usedModel = model;
               break;
@@ -372,6 +377,7 @@ export default function CalculateScreen({
       }
 
       // 5. Parse response
+      setProcessStage("Extracting match data…");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const textContent = (geminiResult as any)?.candidates?.[0]?.content?.parts?.[0]?.text;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -400,6 +406,7 @@ export default function CalculateScreen({
       }).catch(() => {});
 
       // 7. Apply result
+      setProcessStage("Done ✓");
       if (onOcrResult) onOcrResult(JSON.stringify(parsed, null, 2));
       uploadPreviews.forEach((p) => URL.revokeObjectURL(p));
       setUploadFiles([]);
@@ -418,36 +425,50 @@ export default function CalculateScreen({
       }).catch(() => {});
     } finally {
       setIsProcessing(false);
+      setProcessStage("");
     }
   };
 
+  // Contextual delete label
+  const deleteLabel = selectedMatch !== null ? `Delete M${selectedMatch}` : "Clear all data";
+
   return (
     <div className="fixed inset-0 z-[55] overflow-y-auto" style={{ background: "#0c0914" }}>
-      <div className="max-w-3xl mx-auto px-4 py-6">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-white">Calculate</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-xs" style={{ color: "rgba(167,139,250,0.5)" }}>{groups.length > 0 ? `${groups.length} groups · ${matchesDetected} matches` : tournament.name}</p>
-              {tournament.splitEnabled && <GroupFilterDropdown value={groupFilter} onChange={setGroupFilter} groupCount={tournament.groupCount ?? 2} showFinal={tournament.teams.some(t => t.group === "final")} />}
+      <div className="max-w-3xl mx-auto px-4 pt-4 pb-32">
+
+        {/* ═══ Top Bar ═══ */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3 min-w-0">
+            <button onClick={onClose} className="shrink-0 h-9 w-9 rounded-xl flex items-center justify-center transition-all active:scale-90" style={{ background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.2)" }}>
+              <ChevronLeft className="h-4 w-4" style={{ color: "#a78bfa" }} />
+            </button>
+            <div className="min-w-0">
+              <h1 className="text-base font-bold text-white truncate">{tournament.name}</h1>
+              <p className="text-[11px] mt-0.5" style={{ color: "rgba(167,139,250,0.45)" }}>
+                {groups.length > 0 ? `${filteredGroups.length} teams · ${matchesDetected} match${matchesDetected !== 1 ? "es" : ""}` : "Calculate results"}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0 pt-1">
+          <div className="flex items-center gap-1.5 shrink-0">
             {groups.length > 0 && (
-              <button onClick={onClearData} className="p-1.5 rounded-lg transition-colors" style={{ color: "rgba(239,68,68,0.6)" }} title="Reset match data">
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <>
+                <button onClick={onCopyPrompt} className="h-8 px-3 rounded-lg flex items-center gap-1.5 text-[11px] font-semibold transition-all active:scale-95" style={{ background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.15)", color: "#a78bfa" }} title="Copy Prompt">
+                  <ClipboardPaste className="h-3 w-3" /> Copy
+                </button>
+                <button onClick={onPasteJson} className="h-8 px-3 rounded-lg flex items-center gap-1.5 text-[11px] font-semibold transition-all active:scale-95" style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.25)", color: "#c4b5fd" }} title="Paste JSON">
+                  <ClipboardPaste className="h-3 w-3" /> Paste
+                </button>
+              </>
             )}
-            <button onClick={onClose} className="p-1.5 rounded-lg" style={{ color: "rgba(167,139,250,0.5)" }}><X className="h-5 w-5" /></button>
+            {tournament.splitEnabled && <GroupFilterDropdown value={groupFilter} onChange={setGroupFilter} groupCount={tournament.groupCount ?? 2} showFinal={tournament.teams.some(t => t.group === "final")} />}
           </div>
         </div>
 
         {groups.length === 0 ? (
-          /* ── Empty state: Tabbed UI ── */
-          <div className="mt-2 px-1">
+          /* ═══ Empty State — Input Methods ═══ */
+          <div className="mt-4 space-y-3">
             {/* Tab bar */}
-            <div className="flex rounded-xl p-1 mb-4" style={{ background: "rgba(24,24,27,0.6)", border: "1px solid rgba(63,63,70,0.3)" }}>
+            <div className="flex rounded-xl p-1" style={{ background: "rgba(24,24,27,0.6)", border: "1px solid rgba(63,63,70,0.3)" }}>
               <button
                 onClick={() => setCalcTab("auto")}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all"
@@ -458,15 +479,7 @@ export default function CalculateScreen({
               >
                 <Camera className="h-3.5 w-3.5" />
                 <span>Auto Scan</span>
-                <span
-                  className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wider leading-none"
-                  style={calcTab === "auto"
-                    ? { background: "rgba(0,0,0,0.25)", color: "#d1fae5" }
-                    : { background: "rgba(16,185,129,0.15)", color: "rgba(52,211,153,0.7)" }
-                  }
-                >
-                  Beta
-                </span>
+                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wider leading-none" style={calcTab === "auto" ? { background: "rgba(0,0,0,0.25)", color: "#d1fae5" } : { background: "rgba(16,185,129,0.15)", color: "rgba(52,211,153,0.7)" }}>Beta</span>
               </button>
               <button
                 onClick={() => setCalcTab("manual")}
@@ -482,81 +495,62 @@ export default function CalculateScreen({
 
             {calcTab === "manual" ? (
               /* ── Manual tab ── */
-              <div className="w-full rounded-2xl p-4" style={{ background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.25)" }}>
+              <div className="rounded-2xl p-4" style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.2)" }}>
                 <div className="flex items-center gap-3 mb-4">
                   <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(124,58,237,0.2)" }}>
                     <ClipboardPaste className="h-5 w-5" style={{ color: "#a78bfa" }} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-bold text-white">Use Gemini manually</p>
-                    <p className="text-xs mt-0.5" style={{ color: "rgba(167,139,250,0.55)" }}>Copy prompt → paste in Gemini → copy JSON back</p>
+                    <p className="text-sm font-bold text-white">Manual Mode</p>
+                    <p className="text-[11px] mt-0.5" style={{ color: "rgba(167,139,250,0.5)" }}>Copy prompt → Gemini → paste JSON back</p>
                   </div>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {[
-                    { step: "1", title: "Copy the prompt below", desc: "Tap Copy Prompt, then open Gemini and paste it" },
-                    { step: "2", title: "Send & upload screenshots", desc: "Reply with your match result screenshots in the next message" },
-                    { step: "3", title: "Copy the JSON reply", desc: "Gemini responds with a JSON block — select and copy it" },
-                    { step: "4", title: "Paste it here", desc: "Come back and tap the purple 'Paste' button below" },
+                    { step: "1", title: "Copy the prompt", desc: "Tap below, then paste it in Gemini" },
+                    { step: "2", title: "Upload screenshots", desc: "Send match result screenshots in the next message" },
+                    { step: "3", title: "Copy the JSON", desc: "Gemini responds with JSON — copy it" },
+                    { step: "4", title: "Paste it here", desc: "Come back and tap Paste" },
                   ].map((s) => (
                     <div key={s.step} className="flex items-start gap-3">
-                      <div className="h-7 w-7 rounded-lg shrink-0 flex items-center justify-center text-xs font-black" style={{ background: "rgba(124,58,237,0.3)", color: "#c4b5fd" }}>{s.step}</div>
+                      <div className="h-6 w-6 rounded-lg shrink-0 flex items-center justify-center text-[10px] font-black" style={{ background: "rgba(124,58,237,0.25)", color: "#c4b5fd" }}>{s.step}</div>
                       <div className="flex-1">
-                        <p className="text-xs font-bold text-white">{s.title}</p>
-                        <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: "rgba(167,139,250,0.6)" }}>{s.desc}</p>
+                        <p className="text-[11px] font-bold text-white leading-tight">{s.title}</p>
+                        <p className="text-[10px] leading-snug" style={{ color: "rgba(167,139,250,0.5)" }}>{s.desc}</p>
                       </div>
                     </div>
                   ))}
-                  <div className="pt-2 space-y-2">
-                    <button onClick={onCopyPrompt} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white press-scale" style={{ background: "linear-gradient(135deg,#7c3aed,#9333ea)", boxShadow: "0 4px 20px rgba(124,58,237,0.4)" }}>Copy Prompt</button>
-                    <button onClick={onPasteJson} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold press-scale" style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", color: "#c4b5fd" }}><ClipboardPaste className="h-4 w-4" /> Paste JSON from Gemini</button>
-                    <p className="text-[10px] text-center pt-0.5" style={{ color: "rgba(167,139,250,0.35)" }}>Prompt copied to clipboard · paste in Gemini</p>
+                  <div className="pt-2 flex gap-2">
+                    <button onClick={onCopyPrompt} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.97]" style={{ background: "linear-gradient(135deg,#7c3aed,#9333ea)", boxShadow: "0 4px 20px rgba(124,58,237,0.35)" }}>Copy Prompt</button>
+                    <button onClick={onPasteJson} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all active:scale-[0.97]" style={{ background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.3)", color: "#c4b5fd" }}>
+                      <ClipboardPaste className="h-4 w-4" /> Paste
+                    </button>
                   </div>
                 </div>
               </div>
             ) : (
               /* ── Auto Scan tab ── */
-              <div className="w-full rounded-2xl p-4 space-y-4" style={{ background: "linear-gradient(135deg, rgba(16,185,129,0.06), rgba(5,150,105,0.03))", border: "1px solid rgba(16,185,129,0.2)" }}>
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(16,185,129,0.15)" }}>
+              <div className="rounded-2xl p-4 space-y-3" style={{ background: "linear-gradient(135deg, rgba(16,185,129,0.06), rgba(5,150,105,0.03))", border: "1px solid rgba(16,185,129,0.2)" }}>
+                <div className="flex items-center gap-2.5">
+                  <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(16,185,129,0.15)" }}>
                     <Camera className="h-4 w-4 text-emerald-400" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-xs font-bold text-white">Upload Screenshots</p>
-                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wider leading-none bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">Beta</span>
-                    </div>
-                    <p className="text-[10px]" style={{ color: "rgba(52,211,153,0.6)" }}>AI reads your scoreboards instantly</p>
+                    <p className="text-xs font-bold text-white">Upload Screenshots</p>
+                    <p className="text-[10px]" style={{ color: "rgba(52,211,153,0.5)" }}>AI reads scoreboards instantly · max {MAX_SCREENSHOTS}</p>
                   </div>
                 </div>
 
                 {uploadPreviews.length > 0 && (
                   <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
                     {uploadPreviews.map((src, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => setPreviewModalIndex(idx)}
-                        className="relative shrink-0 h-20 w-20 rounded-lg overflow-hidden border cursor-pointer group active:scale-95 transition-all"
-                        style={{ borderColor: "rgba(16,185,129,0.3)" }}
-                        title="Click to preview screenshot"
-                      >
+                      <div key={idx} onClick={() => setPreviewModalIndex(idx)} className="relative shrink-0 h-[72px] w-[72px] rounded-lg overflow-hidden border cursor-pointer group active:scale-95 transition-all" style={{ borderColor: "rgba(16,185,129,0.3)" }}>
                         <img src={src} alt={`Screenshot ${idx + 1}`} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-200" />
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/35 transition-colors flex items-center justify-center pointer-events-none">
-                          <Eye className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                          <Eye className="h-3.5 w-3.5 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
                         </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeFile(idx);
-                          }}
-                          className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full flex items-center justify-center bg-black/80 hover:bg-red-600 text-white transition-all active:scale-90 z-10"
-                          title="Remove screenshot"
-                        >
-                          <XIcon className="h-3 w-3" />
-                        </button>
-                        <span className="absolute bottom-0.5 left-0.5 text-[9px] font-bold px-1 rounded bg-black/60 text-white z-10 pointer-events-none">
-                          {idx + 1}
-                        </span>
+                        <button onClick={(e) => { e.stopPropagation(); removeFile(idx); }} className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full flex items-center justify-center bg-black/80 hover:bg-red-600 text-white transition-all active:scale-90 z-10"><XIcon className="h-2.5 w-2.5" /></button>
+                        <span className="absolute bottom-0.5 left-0.5 text-[8px] font-bold px-1 rounded bg-black/60 text-white z-10 pointer-events-none">{idx + 1}</span>
                       </div>
                     ))}
                   </div>
@@ -566,20 +560,13 @@ export default function CalculateScreen({
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isProcessing}
-                  className="w-full flex flex-col items-center justify-center gap-2 py-5 rounded-xl border-2 border-dashed transition-all active:scale-[0.98]"
+                  className="w-full flex items-center justify-center gap-3 py-4 rounded-xl border-2 border-dashed transition-all active:scale-[0.98]"
                   style={{ borderColor: uploadFiles.length > 0 ? "rgba(16,185,129,0.3)" : "rgba(63,63,70,0.5)", background: uploadFiles.length > 0 ? "rgba(16,185,129,0.03)" : "rgba(24,24,27,0.3)" }}
                 >
-                  <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(16,185,129,0.1)" }}>
-                    <Upload className="h-5 w-5 text-emerald-400/70" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs font-semibold" style={{ color: uploadFiles.length > 0 ? "#34d399" : "rgba(161,161,170,0.8)" }}>
-                      {uploadFiles.length > 0 ? `${uploadFiles.length} screenshot${uploadFiles.length > 1 ? "s" : ""} added` : "Tap to add screenshots"}
-                    </p>
-                    <p className="text-[10px] mt-0.5" style={{ color: "rgba(161,161,170,0.4)" }}>
-                      {uploadFiles.length > 0 ? "Tap to add more" : "Select match result screenshots"}
-                    </p>
-                  </div>
+                  <Upload className="h-5 w-5 text-emerald-400/60" />
+                  <p className="text-xs font-semibold" style={{ color: uploadFiles.length > 0 ? "#34d399" : "rgba(161,161,170,0.7)" }}>
+                    {uploadFiles.length > 0 ? `${uploadFiles.length} screenshot${uploadFiles.length > 1 ? "s" : ""} added · tap for more` : "Tap to add screenshots"}
+                  </p>
                 </button>
 
                 {ocrError && (
@@ -589,10 +576,10 @@ export default function CalculateScreen({
                 <button
                   onClick={handleOcrSubmit}
                   disabled={uploadFiles.length === 0 || isProcessing}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ background: isProcessing ? "rgba(16,185,129,0.3)" : "linear-gradient(135deg, #059669, #10b981)", boxShadow: isProcessing ? "none" : "0 4px 20px rgba(16,185,129,0.3)" }}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ background: isProcessing ? "rgba(16,185,129,0.25)" : "linear-gradient(135deg, #059669, #10b981)", boxShadow: isProcessing ? "none" : "0 4px 20px rgba(16,185,129,0.3)" }}
                 >
-                  {isProcessing ? (<><Loader2 className="h-4 w-4 animate-spin" /> Processing with AI…</>) : (<><ImageIcon className="h-4 w-4" /> Scan {uploadFiles.length} Screenshot{uploadFiles.length !== 1 ? "s" : ""}</>)}
+                  {isProcessing ? (<><Loader2 className="h-4 w-4 animate-spin" /> {processStage || "Processing…"}</>) : (<><ImageIcon className="h-4 w-4" /> Scan {uploadFiles.length} Screenshot{uploadFiles.length !== 1 ? "s" : ""}</>)}
                 </button>
 
                 {isProcessing && (
@@ -601,311 +588,247 @@ export default function CalculateScreen({
                   </p>
                 )}
 
-                <p className="text-[10px] text-center" style={{ color: "rgba(52,211,153,0.3)" }}>Screenshots are processed by Gemini AI · no data stored</p>
+                <p className="text-[10px] text-center" style={{ color: "rgba(52,211,153,0.25)" }}>Processed by Gemini AI · no data stored</p>
               </div>
             )}
           </div>
         ) : (
-          /* ── Groups list ── */
+          /* ═══ Results View — Groups + Matches ═══ */
           <>
-          {/* Add More Matches upload panel (expanded) */}
-          {showAddMatches && (
-            <div className="mb-3 rounded-2xl p-4 space-y-3" style={{ background: "linear-gradient(135deg, rgba(16,185,129,0.06), rgba(5,150,105,0.03))", border: "1px solid rgba(16,185,129,0.2)" }}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-lg flex items-center justify-center" style={{ background: "rgba(16,185,129,0.15)" }}>
-                    <Camera className="h-3.5 w-3.5 text-emerald-400" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-white">Add More Matches</p>
-                    <p className="text-[10px]" style={{ color: "rgba(52,211,153,0.5)" }}>Upload new match screenshots</p>
-                  </div>
-                </div>
-                <button onClick={() => { setShowAddMatches(false); uploadPreviews.forEach((p) => URL.revokeObjectURL(p)); setUploadFiles([]); setUploadPreviews([]); setOcrError(null); }} className="p-1.5 rounded-lg" style={{ color: "rgba(52,211,153,0.4)" }}><X className="h-4 w-4" /></button>
-              </div>
-
-              {uploadPreviews.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-                  {uploadPreviews.map((src, idx) => (
-                    <div key={idx} onClick={() => setPreviewModalIndex(idx)} className="relative shrink-0 h-16 w-16 rounded-lg overflow-hidden border cursor-pointer group active:scale-95 transition-all" style={{ borderColor: "rgba(16,185,129,0.3)" }} title="Click to preview">
-                      <img src={src} alt={`Screenshot ${idx + 1}`} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-200" />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/35 transition-colors flex items-center justify-center pointer-events-none">
-                        <Eye className="h-3 w-3 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
-                      </div>
-                      <button onClick={(e) => { e.stopPropagation(); removeFile(idx); }} className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full flex items-center justify-center bg-black/80 hover:bg-red-600 text-white transition-all active:scale-90 z-10"><XIcon className="h-2.5 w-2.5" /></button>
-                      <span className="absolute bottom-0.5 left-0.5 text-[8px] font-bold px-0.5 rounded bg-black/60 text-white z-10 pointer-events-none">{idx + 1}</span>
+            {/* Add More Matches panel */}
+            {showAddMatches && (
+              <div className="mb-4 rounded-2xl p-4 space-y-3" style={{ background: "linear-gradient(135deg, rgba(16,185,129,0.06), rgba(5,150,105,0.03))", border: "1px solid rgba(16,185,129,0.2)" }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-7 w-7 rounded-lg flex items-center justify-center" style={{ background: "rgba(16,185,129,0.15)" }}>
+                      <Camera className="h-3.5 w-3.5 text-emerald-400" />
                     </div>
-                  ))}
+                    <div>
+                      <p className="text-xs font-bold text-white">Add More Matches</p>
+                      <p className="text-[10px]" style={{ color: "rgba(52,211,153,0.45)" }}>New matches merge with existing data</p>
+                    </div>
+                  </div>
+                  <button onClick={() => { setShowAddMatches(false); uploadPreviews.forEach((p) => URL.revokeObjectURL(p)); setUploadFiles([]); setUploadPreviews([]); setOcrError(null); }} className="p-1.5 rounded-lg transition-colors" style={{ color: "rgba(52,211,153,0.4)" }}><X className="h-4 w-4" /></button>
                 </div>
-              )}
 
-              <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" id="ocr-file-input-add" />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isProcessing}
-                className="w-full flex flex-col items-center justify-center gap-1.5 py-3.5 rounded-xl border-2 border-dashed transition-all active:scale-[0.98]"
-                style={{ borderColor: uploadFiles.length > 0 ? "rgba(16,185,129,0.3)" : "rgba(63,63,70,0.5)", background: uploadFiles.length > 0 ? "rgba(16,185,129,0.03)" : "rgba(24,24,27,0.3)" }}
-              >
-                <Upload className="h-4 w-4 text-emerald-400/70" />
-                <p className="text-[11px] font-semibold" style={{ color: uploadFiles.length > 0 ? "#34d399" : "rgba(161,161,170,0.8)" }}>
-                  {uploadFiles.length > 0 ? `${uploadFiles.length} screenshot${uploadFiles.length > 1 ? "s" : ""} added · tap to add more` : "Tap to add screenshots"}
-                </p>
-              </button>
-
-              {ocrError && (
-                <div className="px-3 py-2 rounded-lg text-xs" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#f87171" }}>{ocrError}</div>
-              )}
-
-              <button
-                onClick={handleOcrSubmit}
-                disabled={uploadFiles.length === 0 || isProcessing}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background: isProcessing ? "rgba(16,185,129,0.3)" : "linear-gradient(135deg, #059669, #10b981)", boxShadow: isProcessing ? "none" : "0 4px 20px rgba(16,185,129,0.3)" }}
-              >
-                {isProcessing ? (<><Loader2 className="h-4 w-4 animate-spin" /> Processing…</>) : (<><ImageIcon className="h-4 w-4" /> Scan {uploadFiles.length} Screenshot{uploadFiles.length !== 1 ? "s" : ""}</>)}
-              </button>
-
-              {isProcessing && (
-                <p className="text-[10px] text-center animate-pulse" style={{ color: "rgba(52,211,153,0.5)" }}>
-                  📱 Please keep screen on while processing…
-                </p>
-              )}
-            </div>
-          )}
-          <div className="space-y-3">
-            {/* Match selector pills + Add more pill */}
-            {matchesDetected > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollbarWidth: "none" }}>
-                {matchesDetected > 1 && (
-                  <button onClick={() => setSelectedMatch(null)} className="shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all" style={selectedMatch === null ? { background: "linear-gradient(135deg,#7c3aed,#9333ea)", color: "#fff" } : { background: "rgba(124,58,237,0.12)", color: "rgba(167,139,250,0.7)", border: "1px solid rgba(124,58,237,0.2)" }}>All</button>
+                {uploadPreviews.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                    {uploadPreviews.map((src, idx) => (
+                      <div key={idx} onClick={() => setPreviewModalIndex(idx)} className="relative shrink-0 h-16 w-16 rounded-lg overflow-hidden border cursor-pointer group active:scale-95 transition-all" style={{ borderColor: "rgba(16,185,129,0.3)" }}>
+                        <img src={src} alt={`Screenshot ${idx + 1}`} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/35 transition-colors flex items-center justify-center pointer-events-none">
+                          <Eye className="h-3 w-3 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); removeFile(idx); }} className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full flex items-center justify-center bg-black/80 hover:bg-red-600 text-white transition-all active:scale-90 z-10"><XIcon className="h-2.5 w-2.5" /></button>
+                        <span className="absolute bottom-0.5 left-0.5 text-[8px] font-bold px-0.5 rounded bg-black/60 text-white z-10 pointer-events-none">{idx + 1}</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
-                {Array.from({ length: matchesDetected }, (_, i) => i + 1).map((mn) => (
-                  <button key={mn} onClick={() => setSelectedMatch(mn)} className="shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all" style={selectedMatch === mn ? { background: "linear-gradient(135deg,#7c3aed,#9333ea)", color: "#fff" } : { background: "rgba(124,58,237,0.12)", color: "rgba(167,139,250,0.7)", border: "1px solid rgba(124,58,237,0.2)" }}>M{mn}</button>
-                ))}
-                {/* + Add matches pill */}
+
+                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" id="ocr-file-input-add" />
                 <button
-                  onClick={() => setShowAddMatches(!showAddMatches)}
-                  className="shrink-0 h-[30px] w-[30px] rounded-full flex items-center justify-center text-xs font-bold transition-all active:scale-90"
-                  style={showAddMatches
-                    ? { background: "linear-gradient(135deg, #059669, #10b981)", color: "#fff" }
-                    : { background: "rgba(16,185,129,0.12)", color: "#34d399", border: "1px solid rgba(16,185,129,0.25)" }
-                  }
-                  title="Add more matches"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isProcessing}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed transition-all active:scale-[0.98]"
+                  style={{ borderColor: uploadFiles.length > 0 ? "rgba(16,185,129,0.3)" : "rgba(63,63,70,0.5)", background: uploadFiles.length > 0 ? "rgba(16,185,129,0.03)" : "rgba(24,24,27,0.3)" }}
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Upload className="h-4 w-4 text-emerald-400/70" />
+                  <p className="text-[11px] font-semibold" style={{ color: uploadFiles.length > 0 ? "#34d399" : "rgba(161,161,170,0.7)" }}>
+                    {uploadFiles.length > 0 ? `${uploadFiles.length} screenshot${uploadFiles.length > 1 ? "s" : ""} · tap for more` : "Tap to add screenshots"}
+                  </p>
                 </button>
+
+                {ocrError && (
+                  <div className="px-3 py-2 rounded-lg text-xs" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#f87171" }}>{ocrError}</div>
+                )}
+
+                <button
+                  onClick={handleOcrSubmit}
+                  disabled={uploadFiles.length === 0 || isProcessing}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ background: isProcessing ? "rgba(16,185,129,0.25)" : "linear-gradient(135deg, #059669, #10b981)", boxShadow: isProcessing ? "none" : "0 4px 20px rgba(16,185,129,0.3)" }}
+                >
+                  {isProcessing ? (<><Loader2 className="h-4 w-4 animate-spin" /> {processStage || "Processing…"}</>) : (<><ImageIcon className="h-4 w-4" /> Scan {uploadFiles.length} Screenshot{uploadFiles.length !== 1 ? "s" : ""}</>)}
+                </button>
+
+                {isProcessing && (
+                  <p className="text-[10px] text-center animate-pulse" style={{ color: "rgba(52,211,153,0.5)" }}>
+                    📱 Please keep screen on while processing…
+                  </p>
+                )}
               </div>
             )}
 
-            {filteredGroups.map((group) => {
-              const topKiller = getTopKiller(group);
-              const isAssigned = !!group.teamId;
-              const isExpanded = expandedGroups.has(group.group);
-              const isDropdownOpen = openDropdown === group.group;
-              return (
-                <div key={group.group} className={`rounded-xl border transition-all ${isAssigned ? "bg-violet-500/[0.03] border-violet-500/20" : "bg-zinc-900/50 border-zinc-800/60"}`}>
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <div className={`flex items-center justify-center h-8 w-8 rounded-lg text-sm font-black shrink-0 ${group.rank === 1 ? "bg-gradient-to-br from-yellow-500 to-amber-600 text-black" : group.rank === 2 ? "bg-gradient-to-br from-gray-300 to-gray-500 text-black" : group.rank === 3 ? "bg-gradient-to-br from-orange-500 to-orange-700 text-white" : "bg-zinc-800 text-zinc-400 border border-zinc-700"}`}>{group.rank}</div>
-                    <div className="flex-1 relative">
-                      <button onClick={() => setOpenDropdown(isDropdownOpen ? null : group.group)} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all ${isAssigned ? "bg-violet-500/10 border border-violet-500/30 text-white" : "bg-zinc-800 border border-zinc-700/60 text-zinc-400"}`}>
-                        <span className="truncate">{isAssigned ? <>{(() => { const tm = tournament.teams.find(t => t.id === group.teamId); const g = tm?.group; return g && g !== "waiting" ? <span className="mr-1 text-[9px] px-1 py-0.5 rounded" style={{ background: "rgba(124,58,237,0.2)", color: "#c4b5fd" }}>{g === "final" ? "F" : g}</span> : null; })()}{group.teamName}</> : "Assign team..."}</span>
-                        <ChevronDown className={`h-3 w-3 shrink-0 ml-2 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`} />
-                      </button>
-                      {isDropdownOpen && (
-                        <div className="absolute top-full left-0 right-0 mt-1 z-20 rounded-lg bg-zinc-800 border border-zinc-700 shadow-xl max-h-48 overflow-y-auto">
-                          {isAssigned && <button onClick={() => { onUnassignTeam(group.group); setOpenDropdown(null); }} className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors border-b border-zinc-700/50">✕ Unassign</button>}
-                          {tournament.teams.filter((t) => !t.out && !assignedTeamIds.has(t.id)).map((t) => (
-                            <button key={t.id} onClick={() => { onAssignTeam(group.group, t.id); setOpenDropdown(null); }} className={`w-full text-left px-3 py-2 text-xs transition-colors hover:bg-zinc-700 ${t.id === group.teamId ? "text-violet-400 font-semibold" : "text-zinc-300"}`}>
-                              {tournament.splitEnabled && t.group && t.group !== "waiting" && <span className="mr-1 text-[9px] px-1 py-0.5 rounded" style={{ background: "rgba(124,58,237,0.25)", color: "#c4b5fd" }}>{t.group === "final" ? "F" : t.group}</span>}
-                              {t.name}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <button onClick={() => toggleExpand(group.group)} className="shrink-0 p-1.5 rounded-lg hover:bg-zinc-800 transition-colors">
-                      {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-zinc-500" /> : <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />}
-                    </button>
-                  </div>
-                  <div className="px-4 pb-3 flex items-center gap-3 flex-wrap">
-                    {(() => {
-                      const ps = tournament.pointSystem ?? DEFAULT_BGMI_POINTS;
-                      if (selectedMatch !== null) {
-                        const m = group.matches.find((m) => m.match === selectedMatch);
-                        if (!m) return <span className="text-[10px] text-zinc-500">Did not play M{selectedMatch}</span>;
-                        const kills = m.teamKills ?? Object.values(m.playerKills ?? {}).reduce((a, b) => a + b, 0);
-                        const pp = m.placementPoints ?? (ps.positionPoints[m.position - 1] ?? 0);
-                        const pts = pp + kills * ps.killPoints;
-                        return (<>
-                          <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[10px]"><span className="text-white/40">PTS</span><span className="font-bold text-violet-400">{pts}</span></span>
-                          <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[10px]"><span className="text-white/40">K</span><span className="font-medium text-white">{kills}</span></span>
-                          {m.position === 1 && <span className="text-[10px] text-yellow-400 font-semibold">🍗 Chicken!</span>}
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ml-auto ${m.position === 1 ? "bg-violet-500/15 text-violet-400" : m.position <= 3 ? "bg-emerald-500/15 text-emerald-400" : "bg-zinc-800 text-zinc-500"}`}>#{m.position}</span>
-                        </>);
-                      }
-                      return (<>
-                        <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[10px]"><span className="text-white/40">PTS</span><span className="font-bold text-violet-400">{group.totals.totalPoints}</span></span>
-                        <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[10px]"><span className="text-white/40">K</span><span className="font-medium text-white">{group.totals.totalKills}</span></span>
-                        {group.totals.chickenDinners > 0 && <span className="text-[10px] text-yellow-400 font-semibold">🍗 {group.totals.chickenDinners}</span>}
-                        <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500"><Trophy className="h-2.5 w-2.5 text-violet-400" />{topKiller.name} ({topKiller.kills}k)</span>
-                        <div className="flex items-center gap-1 ml-auto">
-                          {group.matches.map((m) => <span key={m.match} className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${m.position === 1 ? "bg-violet-500/15 text-violet-400" : m.position <= 3 ? "bg-emerald-500/15 text-emerald-400" : "bg-zinc-800 text-zinc-500"}`}>#{m.position}</span>)}
-                        </div>
-                      </>);
-                    })()}
-                  </div>
-                  {isExpanded && (
-                    <div className="px-4 pb-3 pt-2 border-t border-zinc-800/40 space-y-2">
-                      {group.matches.map((m) => (
-                        <div key={m.match} className="pl-3 border-l-2" style={{ borderColor: m.position === 1 ? "#7c3aed" : "rgba(63,63,70,0.6)" }}>
-                          <div className="flex items-center gap-2 mb-1 text-[11px]">
-                            <span className="font-bold text-zinc-400">M{m.match}</span>
-                            <span className={`font-bold ${m.position === 1 ? "text-violet-400" : m.position <= 3 ? "text-emerald-400" : "text-zinc-500"}`}>#{m.position}</span>
-                            <span className="text-zinc-600">{m.matchPoints}pts</span>
-                            <span className="text-zinc-700 text-[10px]">({m.placementPoints}pp + {m.teamKills}k)</span>
-                          </div>
-                          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                            {Object.entries(m.playerKills).map(([pn, k]) => (
-                              <span key={pn} className="text-[10px] text-zinc-400">{pn} <span className="text-violet-400 font-semibold">{k}k</span></span>
+            {/* Match pills */}
+            <div className="space-y-3">
+              {matchesDetected > 0 && (
+                <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollbarWidth: "none" }}>
+                  {matchesDetected > 1 && (
+                    <button onClick={() => setSelectedMatch(null)} className="shrink-0 px-3.5 py-1.5 rounded-full text-[11px] font-bold transition-all active:scale-95" style={selectedMatch === null ? { background: "linear-gradient(135deg,#7c3aed,#9333ea)", color: "#fff", boxShadow: "0 2px 8px rgba(124,58,237,0.25)" } : { background: "rgba(124,58,237,0.08)", color: "rgba(167,139,250,0.6)", border: "1px solid rgba(124,58,237,0.15)" }}>All</button>
+                  )}
+                  {Array.from({ length: matchesDetected }, (_, i) => i + 1).map((mn) => (
+                    <button key={mn} onClick={() => setSelectedMatch(mn)} className="shrink-0 px-3.5 py-1.5 rounded-full text-[11px] font-bold transition-all active:scale-95" style={selectedMatch === mn ? { background: "linear-gradient(135deg,#7c3aed,#9333ea)", color: "#fff", boxShadow: "0 2px 8px rgba(124,58,237,0.25)" } : { background: "rgba(124,58,237,0.08)", color: "rgba(167,139,250,0.6)", border: "1px solid rgba(124,58,237,0.15)" }}>M{mn}</button>
+                  ))}
+                  <button
+                    onClick={() => setShowAddMatches(!showAddMatches)}
+                    className="shrink-0 h-[30px] w-[30px] rounded-full flex items-center justify-center transition-all active:scale-90"
+                    style={showAddMatches
+                      ? { background: "linear-gradient(135deg, #059669, #10b981)", color: "#fff" }
+                      : { background: "rgba(16,185,129,0.1)", color: "#34d399", border: "1px solid rgba(16,185,129,0.2)" }
+                    }
+                    title="Add more matches"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* ── Group Cards ── */}
+              {filteredGroups.map((group) => {
+                const topKiller = getTopKiller(group);
+                const isAssigned = !!group.teamId;
+                const isExpanded = expandedGroups.has(group.group);
+                const isDropdownOpen = openDropdown === group.group;
+                const ps = tournament.pointSystem ?? DEFAULT_BGMI_POINTS;
+
+                return (
+                  <div key={group.group} className="rounded-xl overflow-hidden transition-all" style={{ background: isAssigned ? "rgba(124,58,237,0.04)" : "rgba(24,24,27,0.5)", border: `1px solid ${isAssigned ? "rgba(124,58,237,0.15)" : "rgba(63,63,70,0.4)"}` }}>
+                    {/* Card header */}
+                    <div className="flex items-center gap-3 px-3.5 py-3">
+                      <div className={`flex items-center justify-center h-8 w-8 rounded-lg text-sm font-black shrink-0 ${group.rank === 1 ? "bg-gradient-to-br from-yellow-400 to-amber-600 text-black shadow-lg shadow-yellow-500/20" : group.rank === 2 ? "bg-gradient-to-br from-gray-200 to-gray-400 text-black" : group.rank === 3 ? "bg-gradient-to-br from-orange-400 to-orange-600 text-white" : "text-zinc-500"}`} style={group.rank > 3 ? { background: "rgba(39,39,42,0.8)", border: "1px solid rgba(63,63,70,0.5)" } : undefined}>{group.rank}</div>
+
+                      <div className="flex-1 relative min-w-0">
+                        <button onClick={() => setOpenDropdown(isDropdownOpen ? null : group.group)} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all ${isAssigned ? "bg-violet-500/10 border border-violet-500/25 text-white" : "bg-zinc-800/80 border border-zinc-700/50 text-zinc-400"}`}>
+                          <span className="truncate">{isAssigned ? <>{(() => { const tm = tournament.teams.find(t => t.id === group.teamId); const g = tm?.group; return g && g !== "waiting" ? <span className="mr-1 text-[9px] px-1 py-0.5 rounded" style={{ background: "rgba(124,58,237,0.2)", color: "#c4b5fd" }}>{g === "final" ? "F" : g}</span> : null; })()}{group.teamName}</> : "Assign team..."}</span>
+                          <ChevronDown className={`h-3 w-3 shrink-0 ml-2 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`} />
+                        </button>
+                        {isDropdownOpen && (
+                          <div className="absolute top-full left-0 right-0 mt-1 z-20 rounded-lg bg-zinc-800 border border-zinc-700 shadow-xl max-h-48 overflow-y-auto">
+                            {isAssigned && <button onClick={() => { onUnassignTeam(group.group); setOpenDropdown(null); }} className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors border-b border-zinc-700/50">✕ Unassign</button>}
+                            {tournament.teams.filter((t) => !t.out && !assignedTeamIds.has(t.id)).map((t) => (
+                              <button key={t.id} onClick={() => { onAssignTeam(group.group, t.id); setOpenDropdown(null); }} className={`w-full text-left px-3 py-2 text-xs transition-colors hover:bg-zinc-700 ${t.id === group.teamId ? "text-violet-400 font-semibold" : "text-zinc-300"}`}>
+                                {tournament.splitEnabled && t.group && t.group !== "waiting" && <span className="mr-1 text-[9px] px-1 py-0.5 rounded" style={{ background: "rgba(124,58,237,0.25)", color: "#c4b5fd" }}>{t.group === "final" ? "F" : t.group}</span>}
+                                {t.name}
+                              </button>
                             ))}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                        )}
+                      </div>
 
-          {/* Persistent action bar for adding more matches */}
-          <div className="sticky bottom-0 pt-3 pb-6 mt-4" style={{ background: "linear-gradient(to top, #0c0914 70%, transparent)" }}>
-            <div className="flex gap-2">
-              <button
-                onClick={onCopyPrompt}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all active:scale-95"
-                style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", color: "#c4b5fd" }}
-              >
-                Copy Prompt
-              </button>
-              <button
-                onClick={onPasteJson}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold text-white transition-all active:scale-95"
-                style={{ background: "linear-gradient(135deg,#7c3aed,#9333ea)", boxShadow: "0 4px 20px rgba(124,58,237,0.4)" }}
-              >
-                <ClipboardPaste className="h-3.5 w-3.5" /> Paste JSON
-              </button>
+                      <button onClick={() => toggleExpand(group.group)} className="shrink-0 p-1.5 rounded-lg hover:bg-zinc-800/80 transition-colors">
+                        {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-zinc-500" /> : <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />}
+                      </button>
+                    </div>
+
+                    {/* Stats row */}
+                    <div className="px-3.5 pb-3 flex items-center gap-2 flex-wrap">
+                      {(() => {
+                        if (selectedMatch !== null) {
+                          const m = group.matches.find((m) => m.match === selectedMatch);
+                          if (!m) return <span className="text-[10px] text-zinc-600 italic">Did not play M{selectedMatch}</span>;
+                          const kills = m.teamKills ?? Object.values(m.playerKills ?? {}).reduce((a, b) => a + b, 0);
+                          const pp = m.placementPoints ?? (ps.positionPoints[m.position - 1] ?? 0);
+                          const pts = pp + kills * ps.killPoints;
+                          return (<>
+                            <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px]" style={{ background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.15)" }}><span style={{ color: "rgba(167,139,250,0.5)" }}>PTS</span><span className="font-bold text-violet-400">{pts}</span></span>
+                            <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px]" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}><span className="text-white/30">K</span><span className="font-semibold text-white/80">{kills}</span></span>
+                            {m.position === 1 && <span className="text-[10px] text-yellow-400 font-semibold">🍗</span>}
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ml-auto ${m.position === 1 ? "bg-violet-500/15 text-violet-400" : m.position <= 3 ? "bg-emerald-500/12 text-emerald-400" : "bg-zinc-800/80 text-zinc-500"}`}>#{m.position}</span>
+                          </>);
+                        }
+                        return (<>
+                          <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px]" style={{ background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.15)" }}><span style={{ color: "rgba(167,139,250,0.5)" }}>PTS</span><span className="font-bold text-violet-400">{group.totals.totalPoints}</span></span>
+                          <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px]" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}><span className="text-white/30">K</span><span className="font-semibold text-white/80">{group.totals.totalKills}</span></span>
+                          {group.totals.chickenDinners > 0 && <span className="text-[10px] text-yellow-400 font-semibold">🍗 {group.totals.chickenDinners}</span>}
+                          <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500"><Trophy className="h-2.5 w-2.5 text-violet-400/60" />{topKiller.name} ({topKiller.kills}k)</span>
+                          <div className="flex items-center gap-1 ml-auto">
+                            {group.matches.map((m) => <span key={m.match} className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${m.position === 1 ? "bg-violet-500/15 text-violet-400" : m.position <= 3 ? "bg-emerald-500/12 text-emerald-400" : "bg-zinc-800/80 text-zinc-500"}`}>#{m.position}</span>)}
+                          </div>
+                        </>);
+                      })()}
+                    </div>
+
+                    {/* Expanded match details */}
+                    {isExpanded && (
+                      <div className="px-3.5 pb-3 pt-2 space-y-2" style={{ borderTop: "1px solid rgba(63,63,70,0.3)" }}>
+                        {group.matches.map((m) => (
+                          <div key={m.match} className="pl-3 border-l-2" style={{ borderColor: m.position === 1 ? "#7c3aed" : "rgba(63,63,70,0.5)" }}>
+                            <div className="flex items-center gap-2 mb-1 text-[11px]">
+                              <span className="font-bold text-zinc-400">M{m.match}</span>
+                              <span className={`font-bold ${m.position === 1 ? "text-violet-400" : m.position <= 3 ? "text-emerald-400" : "text-zinc-500"}`}>#{m.position}</span>
+                              <span className="text-zinc-600">{m.matchPoints}pts</span>
+                              <span className="text-zinc-700 text-[10px]">({m.placementPoints}pp + {m.teamKills}k)</span>
+                            </div>
+                            <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                              {Object.entries(m.playerKills).map(([pn, k]) => (
+                                <span key={pn} className="text-[10px] text-zinc-400">{pn} <span className="text-violet-400 font-semibold">{k}k</span></span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <p className="text-[10px] text-center mt-1.5" style={{ color: "rgba(167,139,250,0.3)" }}>
-              Add more matches · data will accumulate
-            </p>
-          </div>
+
+            {/* ═══ Floating Bottom Bar ═══ */}
+            <div className="fixed bottom-0 left-0 right-0 z-[56]" style={{ background: "linear-gradient(to top, #0c0914 80%, transparent)" }}>
+              <div className="max-w-3xl mx-auto px-4 pb-5 pt-3 space-y-2">
+                <div className="flex gap-2">
+                  <button onClick={onPasteJson} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold text-white transition-all active:scale-95" style={{ background: "linear-gradient(135deg,#7c3aed,#9333ea)", boxShadow: "0 4px 16px rgba(124,58,237,0.3)" }}>
+                    <ClipboardPaste className="h-3.5 w-3.5" /> Paste JSON
+                  </button>
+                  <button onClick={onCopyPrompt} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all active:scale-95" style={{ background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.2)", color: "#a78bfa" }}>
+                    Copy Prompt
+                  </button>
+                </div>
+                <button
+                  onClick={onClearData}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-medium transition-all active:scale-[0.98]"
+                  style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.1)", color: "rgba(239,68,68,0.5)" }}
+                >
+                  <Trash2 className="h-3 w-3" /> {deleteLabel}
+                </button>
+              </div>
+            </div>
           </>
         )}
       </div>
 
       {/* ── Fullscreen Image Preview Lightbox ── */}
       {previewModalIndex !== null && uploadPreviews[previewModalIndex] && (
-        <div
-          className="fixed inset-0 z-[120] flex flex-col items-center justify-between p-3 sm:p-5 bg-black/95 backdrop-blur-md select-none animate-in fade-in duration-200"
-          onClick={() => setPreviewModalIndex(null)}
-        >
-          {/* Top Bar */}
-          <div
-            className="w-full max-w-4xl flex items-center justify-between py-2 px-1 z-10"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-[120] flex flex-col items-center justify-between p-3 sm:p-5 bg-black/95 backdrop-blur-md select-none animate-in fade-in duration-200" onClick={() => setPreviewModalIndex(null)}>
+          <div className="w-full max-w-4xl flex items-center justify-between py-2 px-1 z-10" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold px-3 py-1 rounded-full bg-white/10 text-white/90 border border-white/10">
-                Screenshot {previewModalIndex + 1} of {uploadPreviews.length}
-              </span>
-              {uploadFiles[previewModalIndex]?.name && (
-                <span className="text-xs text-white/50 truncate max-w-[180px] sm:max-w-xs">
-                  {uploadFiles[previewModalIndex].name}
-                </span>
-              )}
+              <span className="text-xs font-bold px-3 py-1 rounded-full bg-white/10 text-white/90 border border-white/10">{previewModalIndex + 1} / {uploadPreviews.length}</span>
+              {uploadFiles[previewModalIndex]?.name && <span className="text-xs text-white/40 truncate max-w-[160px]">{uploadFiles[previewModalIndex].name}</span>}
             </div>
-
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  const idx = previewModalIndex;
-                  removeFile(idx);
-                }}
-                className="p-2 rounded-xl bg-red-500/15 hover:bg-red-500/30 text-red-400 hover:text-red-300 transition-colors"
-                title="Delete screenshot"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setPreviewModalIndex(null)}
-                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
-                title="Close preview (Esc)"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <button onClick={() => removeFile(previewModalIndex)} className="p-2 rounded-xl bg-red-500/15 hover:bg-red-500/30 text-red-400 transition-colors"><Trash2 className="h-4 w-4" /></button>
+              <button onClick={() => setPreviewModalIndex(null)} className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"><X className="h-4 w-4" /></button>
             </div>
           </div>
-
-          {/* Center Image with Prev / Next */}
-          <div
-            className="relative flex-1 w-full max-w-4xl flex items-center justify-center min-h-0 py-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {uploadPreviews.length > 1 && (
-              <button
-                onClick={() => setPreviewModalIndex((prev) => (prev! > 0 ? prev! - 1 : uploadPreviews.length - 1))}
-                className="absolute left-1 sm:left-3 top-1/2 -translate-y-1/2 p-2.5 sm:p-3 rounded-full bg-black/70 hover:bg-black/95 text-white border border-white/15 shadow-2xl transition-all active:scale-90 z-10"
-                title="Previous image (←)"
-              >
-                <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
-              </button>
-            )}
-
-            <img
-              src={uploadPreviews[previewModalIndex]}
-              alt={`Screenshot ${previewModalIndex + 1}`}
-              className="max-h-[75vh] max-w-[90vw] md:max-w-[80vw] object-contain rounded-xl shadow-2xl border border-white/10"
-            />
-
-            {uploadPreviews.length > 1 && (
-              <button
-                onClick={() => setPreviewModalIndex((prev) => (prev! < uploadPreviews.length - 1 ? prev! + 1 : 0))}
-                className="absolute right-1 sm:right-3 top-1/2 -translate-y-1/2 p-2.5 sm:p-3 rounded-full bg-black/70 hover:bg-black/95 text-white border border-white/15 shadow-2xl transition-all active:scale-90 z-10"
-                title="Next image (→)"
-              >
-                <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
-              </button>
-            )}
+          <div className="relative flex-1 w-full max-w-4xl flex items-center justify-center min-h-0 py-2" onClick={(e) => e.stopPropagation()}>
+            {uploadPreviews.length > 1 && <button onClick={() => setPreviewModalIndex((p) => (p! > 0 ? p! - 1 : uploadPreviews.length - 1))} className="absolute left-1 sm:left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/70 hover:bg-black/95 text-white border border-white/15 shadow-2xl transition-all active:scale-90 z-10"><ChevronLeft className="h-5 w-5" /></button>}
+            <img src={uploadPreviews[previewModalIndex]} alt={`Screenshot ${previewModalIndex + 1}`} className="max-h-[75vh] max-w-[90vw] md:max-w-[80vw] object-contain rounded-xl shadow-2xl border border-white/10" />
+            {uploadPreviews.length > 1 && <button onClick={() => setPreviewModalIndex((p) => (p! < uploadPreviews.length - 1 ? p! + 1 : 0))} className="absolute right-1 sm:right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/70 hover:bg-black/95 text-white border border-white/15 shadow-2xl transition-all active:scale-90 z-10"><ChevronRight className="h-5 w-5" /></button>}
           </div>
-
-          {/* Bottom Strip: thumbnail preview gallery & keyboard hint */}
-          <div
-            className="w-full max-w-4xl flex flex-col items-center gap-2 py-2 z-10"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="w-full max-w-4xl flex flex-col items-center gap-2 py-2 z-10" onClick={(e) => e.stopPropagation()}>
             {uploadPreviews.length > 1 && (
               <div className="flex items-center gap-2 max-w-full overflow-x-auto px-2 py-1" style={{ scrollbarWidth: "none" }}>
                 {uploadPreviews.map((thumb, tIdx) => (
-                  <button
-                    key={tIdx}
-                    onClick={() => setPreviewModalIndex(tIdx)}
-                    className={`relative shrink-0 h-12 w-12 rounded-lg overflow-hidden border-2 transition-all ${
-                      tIdx === previewModalIndex
-                        ? "border-emerald-400 scale-105 shadow-lg shadow-emerald-500/25 ring-2 ring-emerald-400/30"
-                        : "border-white/10 opacity-50 hover:opacity-90"
-                    }`}
-                  >
-                    <img src={thumb} alt={`Thumbnail ${tIdx + 1}`} className="h-full w-full object-cover" />
-                    <span className="absolute bottom-0.5 right-0.5 text-[8px] font-bold px-1 rounded bg-black/70 text-white">
-                      {tIdx + 1}
-                    </span>
+                  <button key={tIdx} onClick={() => setPreviewModalIndex(tIdx)} className={`relative shrink-0 h-12 w-12 rounded-lg overflow-hidden border-2 transition-all ${tIdx === previewModalIndex ? "border-emerald-400 scale-105 shadow-lg shadow-emerald-500/25" : "border-white/10 opacity-50 hover:opacity-90"}`}>
+                    <img src={thumb} alt={`Thumb ${tIdx + 1}`} className="h-full w-full object-cover" />
+                    <span className="absolute bottom-0.5 right-0.5 text-[8px] font-bold px-1 rounded bg-black/70 text-white">{tIdx + 1}</span>
                   </button>
                 ))}
               </div>
             )}
             <p className="text-[10px] text-white/40 hidden sm:block">
-              Tip: Press <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono text-[9px]">Esc</kbd> to close · Use <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono text-[9px]">←</kbd> <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono text-[9px]">→</kbd> to switch screenshots
+              <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono text-[9px]">Esc</kbd> close · <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono text-[9px]">←</kbd> <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono text-[9px]">→</kbd> navigate
             </p>
           </div>
         </div>
@@ -913,3 +836,4 @@ export default function CalculateScreen({
     </div>
   );
 }
+
