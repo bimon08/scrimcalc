@@ -130,10 +130,10 @@ export async function POST(req: Request) {
             break; // Model deprecated, try next model
           }
 
-          // If this key is invalid (401/403), skip to next key
-          if (res.status === 401 || res.status === 403) {
-            console.warn(`Key ${keyIdx + 1}: Invalid or forbidden, trying next key...`);
-            break; // break model loop too
+          // If this key is invalid (400/401/403), skip to next key
+          if (res.status === 400 || res.status === 401 || res.status === 403) {
+            console.warn(`Key ${keyIdx + 1}: Invalid or forbidden (${res.status}), trying next key...`);
+            continue outer; // skip remaining models+retries for this key
           }
 
           const errBody = await res.text();
