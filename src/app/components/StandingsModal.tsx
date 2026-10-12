@@ -60,7 +60,9 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
   const teamLogo = (teamId: string, size: string) => {
     const logo = logoMap.get(teamId);
     if (!logo) return null;
-    return <img src={logo} alt="" style={{ width: size, height: size, borderRadius: "2px", objectFit: "cover" as const, flexShrink: 0 }} />;
+    // Make logo 2.5x font size so it's clearly visible in exported images
+    const logoSize = `${parseFloat(size) * 2.5}px`;
+    return <img src={logo} alt="" style={{ width: logoSize, height: logoSize, borderRadius: "2px", objectFit: "cover" as const, flexShrink: 0 }} />;
   };
   const warheadData = [...filteredStandings].sort((a, b) => b.totalKills - a.totalKills);
 
