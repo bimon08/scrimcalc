@@ -8,6 +8,7 @@ import standingsThemes from "@/lib/standingsThemes";
 import GroupFilterDropdown from "./GroupFilterDropdown";
 import ExportPopover from "./ExportPopover";
 import ThemeCarousel from "./ThemeCarousel";
+import TemplateEditor from "./TemplateEditor";
 
 const APP_NAME = "ScrimCalc";
 type Theme = typeof standingsThemes[0];
@@ -25,6 +26,7 @@ interface Props {
 export default function StandingsModal({ tournament, standings, standingsTab, groupFilter, setGroupFilter, onClose }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [format, setFormat] = useState<Format>("landscape");
 
   const handleActiveIndexChange = (i: number) => { setActiveIdx(i); };
@@ -803,6 +805,27 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
   };
 
 
+  // Wrap renderCard for carousel — adds click-to-edit
+  const carouselRenderCard = (t: typeof standingsThemes[0], i: number) => (
+    <div key={t.id} className="shrink-0" onClick={() => { setActiveIdx(i); setEditingIdx(i); }} style={{ cursor: "pointer" }}>
+      {renderCard(t, i)}
+    </div>
+  );
+
+  // Editor mode
+  if (editingIdx !== null) {
+    return (
+      <TemplateEditor
+        renderCard={renderCard}
+        themeIdx={editingIdx}
+        onBack={() => setEditingIdx(null)}
+        exportFileName={`${tournament.name || "standings"}-${standingsTab}`}
+        format={format}
+        onFormatChange={setFormat}
+      />
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[55] flex flex-col" style={{ background: "#0a0a0a" }}>
       <div className="shrink-0 flex items-center justify-between px-4 pt-4 pb-2">
@@ -813,7 +836,7 @@ export default function StandingsModal({ tournament, standings, standingsTab, gr
         </div>
         <ExportPopover onShare={() => capture(false)} onDownload={() => capture(true)} format={format} onFormatChange={setFormat} />
       </div>
-      <ThemeCarousel renderCard={renderCard} onActiveIndexChange={handleActiveIndexChange} />
+      <ThemeCarousel renderCard={carouselRenderCard} onActiveIndexChange={handleActiveIndexChange} />
     </div>
   );
 }

@@ -148,3 +148,29 @@ button, a { -webkit-tap-highlight-color: transparent; }
   background-size: 800px 100%;
   animation: skeleton-shimmer 1.6s ease-in-out infinite;
 }
+
+/* ── Template editor range sliders ─────────────────────────────────── */
+.editor-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.editor-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #a855f7;
+  border: 2px solid white;
+  margin-top: -5px;
+  box-shadow: 0 0 8px rgba(168,85,247,0.5);
+}
+.editor-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #a855f7;
+  border: 2px solid white;
+  box-shadow: 0 0 8px rgba(168,85,247,0.5);
+}
