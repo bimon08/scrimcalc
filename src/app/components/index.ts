@@ -17,3 +17,4 @@ export { default as CalculateScreen } from "./CalculateScreen";
 export { default as MainView } from "./MainView";
 export { default as RulesModal } from "./RulesModal";
 export { default as MatchEditOverlay } from "./MatchEditOverlay";
+export { default as RegistrationsOverlay } from "./RegistrationsOverlay";

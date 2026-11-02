@@ -3,12 +3,13 @@ import { useState, useEffect, useCallback, ReactNode } from "react";
 import {
   Plus, Trash2, Share2, Users, MoreHorizontal,
   FileDown, Database, Table2, Flame, ImageIcon, Pencil,
-  Link2, ClipboardCheck, ExternalLink,
+  Link2, ClipboardCheck, ExternalLink, ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tournament } from "@/lib/types";
 import { authFetch } from "@/lib/authFetch";
 import type { SubscriptionInfo } from "../hooks/useSubscription";
+import RegistrationsOverlay from "./RegistrationsOverlay";
 
 /* ── Inline sub-components ── */
 function QuickBtn({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
@@ -71,6 +72,7 @@ export default function MainView({
   const [tournamentTab, setTournamentTab] = useState<'mine' | 'shared'>('mine');
   const [regPages, setRegPages] = useState<Record<string, RegPageInfo>>({});
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
+  const [showRegsFor, setShowRegsFor] = useState<{ id: string; name: string } | null>(null);
 
   const toggleCard = (id: string) => setExpandedCards(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
@@ -263,6 +265,13 @@ export default function MainView({
                                 badge={reg.regCount}
                               />
                               <Pill
+                                label="Registrations"
+                                icon={<ClipboardList className="h-3 w-3" />}
+                                onPress={() => setShowRegsFor({ id: t.id, name: t.name })}
+                                variant="reg"
+                                badge={reg.regCount}
+                              />
+                              <Pill
                                 label="Preview"
                                 icon={<ExternalLink className="h-3 w-3" />}
                                 onPress={() => openRegPage(reg.slug)}
@@ -306,6 +315,14 @@ export default function MainView({
           <Plus className="h-4 w-4" /> Create
         </button>
       </div>
+      {/* REGISTRATIONS OVERLAY */}
+      {showRegsFor && (
+        <RegistrationsOverlay
+          tournamentId={showRegsFor.id}
+          tournamentName={showRegsFor.name}
+          onClose={() => setShowRegsFor(null)}
+        />
+      )}
     </>
   );
 }
