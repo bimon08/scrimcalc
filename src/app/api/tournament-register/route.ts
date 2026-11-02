@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
         player3Id: player3Id || null,
         player4Ign: player4Ign || null,
         player4Id: player4Id || null,
-        extraPlayers: Array.isArray(extraPlayers) && extraPlayers.length > 0 ? extraPlayers.slice(0, 2) : undefined,
+        extraPlayers: Array.isArray(extraPlayers) && extraPlayers.length > 0 ? extraPlayers.slice(0, 1) : undefined,
         utrNumber: utrNumber || null,
         paymentProofUrl: paymentProofUrl || null,
       },

@@ -623,7 +623,7 @@ export default function TournamentRegistrationPage() {
 
             {activeStepKey === "squad" && (
               <div className="tp-form-step">
-                {/* Max 6 total: IGL + Player 2-4 + up to 2 extras */}
+                {/* Max 5 total: IGL + Player 2-4 + 1 sub */}
                 {[{ l: "Player 2", ig: p2Ign, sI: setP2Ign, pi: p2Id, sP: setP2Id },
                   { l: "Player 3", ig: p3Ign, sI: setP3Ign, pi: p3Id, sP: setP3Id },
                   { l: "Player 4", ig: p4Ign, sI: setP4Ign, pi: p4Id, sP: setP4Id }].map((p, idx) => (
@@ -634,7 +634,7 @@ export default function TournamentRegistrationPage() {
                         <input className="tp-fi" placeholder="In-Game Name" value={p.ig}
                           onChange={e => {
                             p.sI(e.target.value);
-                            if (idx === 2 && e.target.value.trim() && extraPlayers.length === 0 && extraPlayers.length < 2) {
+                            if (idx === 2 && e.target.value.trim() && extraPlayers.length === 0 && extraPlayers.length < 1) {
                               setExtraPlayers([{ ign: "", id: "" }]);
                             }
                           }} />
@@ -643,7 +643,7 @@ export default function TournamentRegistrationPage() {
                         <input className="tp-fi" placeholder="BGMI ID" value={p.pi}
                           onChange={e => {
                             p.sP(e.target.value);
-                            if (idx === 2 && e.target.value.trim() && extraPlayers.length === 0 && extraPlayers.length < 2 && !vis(fc, "squadNames")) {
+                            if (idx === 2 && e.target.value.trim() && extraPlayers.length === 0 && extraPlayers.length < 1 && !vis(fc, "squadNames")) {
                               setExtraPlayers([{ ign: "", id: "" }]);
                             }
                           }} />
@@ -663,7 +663,7 @@ export default function TournamentRegistrationPage() {
                           onChange={e => {
                             const v = e.target.value;
                             setExtraPlayers(prev => prev.map((p, i) => i === idx ? { ...p, ign: v } : p));
-                            if (idx === extraPlayers.length - 1 && v.trim() && extraPlayers.length < 2) {
+                            if (idx === extraPlayers.length - 1 && v.trim() && extraPlayers.length < 1) {
                               setExtraPlayers(prev => [...prev, { ign: "", id: "" }]);
                             }
                           }}
@@ -683,7 +683,7 @@ export default function TournamentRegistrationPage() {
                           onChange={e => {
                             const v = e.target.value;
                             setExtraPlayers(prev => prev.map((p, i) => i === idx ? { ...p, id: v } : p));
-                            if (!vis(fc, "squadNames") && idx === extraPlayers.length - 1 && v.trim() && extraPlayers.length < 2) {
+                            if (!vis(fc, "squadNames") && idx === extraPlayers.length - 1 && v.trim() && extraPlayers.length < 1) {
                               setExtraPlayers(prev => [...prev, { ign: "", id: "" }]);
                             }
                           }}
