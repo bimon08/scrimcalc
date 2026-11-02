@@ -88,14 +88,38 @@ const PARTICLE_OPTIONS = [
   { value: "none", label: "None" },
 ];
 
-const FIELD_KEYS = [
-  { key: "state", label: "State / Region dropdown" },
-  { key: "teamLogo", label: "Team Logo upload" },
-  { key: "email", label: "Email address" },
-  { key: "squadNames", label: "Squad member names" },
-  { key: "squadIds", label: "Squad member IDs" },
-  { key: "utrNumber", label: "UTR Number" },
-  { key: "paymentProof", label: "Payment Screenshot" },
+const STEP_FIELDS = [
+  {
+    step: 0, label: "Step 1 — Team", emoji: "🏷️",
+    fields: [
+      { key: "state", label: "State / Region" },
+      { key: "teamName", label: "Team Name" },
+      { key: "teamLogo", label: "Team Logo" },
+    ],
+  },
+  {
+    step: 1, label: "Step 2 — Leader", emoji: "👑",
+    fields: [
+      { key: "iglName", label: "In-Game Name (IGN)" },
+      { key: "iglId", label: "Player ID" },
+      { key: "whatsapp", label: "WhatsApp Number" },
+      { key: "email", label: "Email Address" },
+    ],
+  },
+  {
+    step: 2, label: "Step 3 — Squad", emoji: "👥",
+    fields: [
+      { key: "squadNames", label: "Member Names" },
+      { key: "squadIds", label: "Member IDs" },
+    ],
+  },
+  {
+    step: 3, label: "Step 4 — Payment", emoji: "💳",
+    fields: [
+      { key: "utrNumber", label: "UTR Number" },
+      { key: "paymentProof", label: "Payment Screenshot" },
+    ],
+  },
 ];
 
 type Tab = "submissions" | "settings" | "link";
@@ -465,23 +489,62 @@ export default function RegistrationManager({ tournamentId, tournamentName, onCl
               </SectionCard>
 
               {/* Field config */}
+              {/* Field config — organized by steps */}
               <SectionCard title="Form Fields">
-                <p className="text-[10px] mb-2" style={{ color: "rgba(196,181,253,0.35)" }}>Control what teams must fill in</p>
-                {FIELD_KEYS.map(f => {
-                  const val = page.fieldConfig?.[f.key] || "required";
-                  return (
-                    <div key={f.key} className="flex items-center justify-between py-2" style={{ borderBottom: "1px solid rgba(124,58,237,0.08)" }}>
-                      <span className="text-xs text-white font-medium">{f.label}</span>
-                      <div className="flex gap-1">
-                        {(["required", "optional", "hidden"] as const).map(opt => (
-                          <button key={opt} onClick={() => updateFieldConfig(f.key, opt)} className="px-2 py-1 rounded text-[10px] font-bold transition-all" style={{ background: val === opt ? (opt === "hidden" ? "rgba(239,68,68,0.15)" : opt === "required" ? "rgba(34,197,94,0.15)" : "rgba(251,191,36,0.15)") : "transparent", color: val === opt ? (opt === "hidden" ? "#ef4444" : opt === "required" ? "#22c55e" : "#fbbf24") : "rgba(196,181,253,0.3)", border: `1px solid ${val === opt ? (opt === "hidden" ? "rgba(239,68,68,0.3)" : opt === "required" ? "rgba(34,197,94,0.3)" : "rgba(251,191,36,0.3)") : "transparent"}` }}>
-                            {opt === "required" ? "Req" : opt === "optional" ? "Opt" : "Hide"}
-                          </button>
-                        ))}
+                <p className="text-[10px] mb-3" style={{ color: "rgba(196,181,253,0.35)" }}>Control what teams must fill in — organized by registration steps</p>
+                <div className="space-y-3">
+                  {STEP_FIELDS.map(group => {
+                    // Check if entire step is hidden
+                    const allHidden = group.fields.every(f => (page.fieldConfig?.[f.key] || "required") === "hidden");
+                    return (
+                      <div key={group.step} className="rounded-xl overflow-hidden" style={{ background: allHidden ? "rgba(239,68,68,0.04)" : "rgba(139,92,246,0.04)", border: `1px solid ${allHidden ? "rgba(239,68,68,0.15)" : "rgba(139,92,246,0.1)"}` }}>
+                        {/* Step header */}
+                        <div className="flex items-center justify-between px-3 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm">{group.emoji}</span>
+                            <span className="text-xs font-bold" style={{ color: allHidden ? "rgba(239,68,68,0.6)" : "#c4b5fd" }}>{group.label}</span>
+                          </div>
+                          {allHidden && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: "rgba(239,68,68,0.12)", color: "#ef4444" }}>HIDDEN</span>}
+                        </div>
+                        {/* Fields */}
+                        <div className="px-3 pb-2.5 space-y-0.5">
+                          {group.fields.map(f => {
+                            const val = page.fieldConfig?.[f.key] || "required";
+                            return (
+                              <div key={f.key} className="flex items-center justify-between py-1.5">
+                                <span className="text-[11px] font-medium" style={{ color: val === "hidden" ? "rgba(196,181,253,0.25)" : "rgba(255,255,255,0.8)" }}>{f.label}</span>
+                                <div className="flex gap-0.5">
+                                  {(["required", "optional", "hidden"] as const).map(opt => (
+                                    <button
+                                      key={opt}
+                                      onClick={() => updateFieldConfig(f.key, opt)}
+                                      className="px-2 py-1 rounded text-[10px] font-bold transition-all active:scale-95"
+                                      style={{
+                                        background: val === opt
+                                          ? opt === "hidden" ? "rgba(239,68,68,0.18)" : opt === "required" ? "rgba(34,197,94,0.18)" : "rgba(251,191,36,0.18)"
+                                          : "transparent",
+                                        color: val === opt
+                                          ? opt === "hidden" ? "#ef4444" : opt === "required" ? "#22c55e" : "#fbbf24"
+                                          : "rgba(196,181,253,0.25)",
+                                        border: `1px solid ${
+                                          val === opt
+                                            ? opt === "hidden" ? "rgba(239,68,68,0.3)" : opt === "required" ? "rgba(34,197,94,0.3)" : "rgba(251,191,36,0.3)"
+                                            : "transparent"
+                                        }`,
+                                      }}
+                                    >
+                                      {opt === "required" ? "Req" : opt === "optional" ? "Opt" : "Hide"}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </SectionCard>
             </div>
           )
