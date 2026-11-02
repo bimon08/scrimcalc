@@ -14,7 +14,6 @@ export const metadata: Metadata = {
     icon: "/favicon.png",
     apple: "/apple-touch-icon.png",
   },
-  themeColor: "#0a0d1a",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
