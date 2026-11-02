@@ -3,13 +3,13 @@ import { useState, useEffect, useCallback, ReactNode } from "react";
 import {
   Plus, Trash2, Share2, Users, MoreHorizontal,
   FileDown, Database, Table2, Flame, ImageIcon, Pencil,
-  Link2, ClipboardCheck, ExternalLink, ClipboardList,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tournament } from "@/lib/types";
 import { authFetch } from "@/lib/authFetch";
 import type { SubscriptionInfo } from "../hooks/useSubscription";
-import RegistrationsOverlay from "./RegistrationsOverlay";
+import RegistrationManager from "./RegistrationManager";
 
 /* ── Inline sub-components ── */
 function QuickBtn({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
@@ -71,7 +71,6 @@ export default function MainView({
   const [renameValue, setRenameValue] = useState("");
   const [tournamentTab, setTournamentTab] = useState<'mine' | 'shared'>('mine');
   const [regPages, setRegPages] = useState<Record<string, RegPageInfo>>({});
-  const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [showRegsFor, setShowRegsFor] = useState<{ id: string; name: string } | null>(null);
 
   const toggleCard = (id: string) => setExpandedCards(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -93,19 +92,6 @@ export default function MainView({
   useEffect(() => {
     if (pageLoaded) fetchRegPages();
   }, [pageLoaded, fetchRegPages]);
-
-  const copyRegLink = (slug: string) => {
-    const url = `${window.location.origin}/tournament/${slug}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopiedSlug(slug);
-      toast.success("Registration link copied!");
-      setTimeout(() => setCopiedSlug(null), 2000);
-    });
-  };
-
-  const openRegPage = (slug: string) => {
-    window.open(`/tournament/${slug}`, "_blank");
-  };
 
   const mineCount = tournaments.filter(t => !isCollab(t)).length;
   const sharedCount = tournaments.filter(t => isCollab(t)).length;
@@ -232,7 +218,6 @@ export default function MainView({
                       <div className="flex items-center gap-2 mt-0.5">
                         <p className="text-xs" style={{ color: "rgba(167,139,250,0.5)" }}>Teams: {t.teams.filter(tm => !tm.out).length}{t.splitEnabled && ` · ${t.groupCount ?? 2} Groups`}</p>
                         {t.updatedAt && <span className="text-[10px]" style={{ color: "rgba(167,139,250,0.3)" }}>· {new Date(t.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true })}</span>}
-                        {reg && <span className="text-[10px] px-1 rounded" style={{ color: "#6ee7b7", background: "rgba(16,185,129,0.12)" }}>🔗 Reg</span>}
                       </div>
                     </div>
                   </div>
@@ -253,33 +238,15 @@ export default function MainView({
                           <Pill label="Certificate" onPress={() => onOpenAction(t, "certificate")} />
                           <Pill label="Room Info" icon={<svg viewBox="0 0 24 24" className="h-3 w-3" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" /><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.534 5.859L0 24l6.335-1.518A11.96 11.96 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.003-1.371l-.36-.214-3.722.892.934-3.617-.236-.373A9.818 9.818 0 0112 2.182c5.418 0 9.818 4.4 9.818 9.818 0 5.419-4.4 9.818-9.818 9.818z" /></svg>} onPress={() => onOpenAction(t, "room-info")} />
                           <Pill label="Rules" onPress={() => onOpenAction(t, "rules")} />
-                          {/* Bookings pill hidden for now — wallet-based flow deprecated in favor of registrations
-                          <Pill label={`Bookings${t.isActive ? " 🟢" : ""}`} onPress={() => onOpenAction(t, "bookings")} />
-                          */}
-                          {/* Registration Link pills */}
+                          {/* Registration — single pill for full management */}
                           {reg && (
-                            <>
-                              <Pill
-                                label={copiedSlug === reg.slug ? "Copied!" : "Reg Link"}
-                                icon={copiedSlug === reg.slug ? <ClipboardCheck className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
-                                onPress={() => copyRegLink(reg.slug)}
-                                variant="reg"
-                                badge={reg.regCount}
-                              />
-                              <Pill
-                                label="Registrations"
-                                icon={<ClipboardList className="h-3 w-3" />}
-                                onPress={() => setShowRegsFor({ id: t.id, name: t.name })}
-                                variant="reg"
-                                badge={reg.regCount}
-                              />
-                              <Pill
-                                label="Preview"
-                                icon={<ExternalLink className="h-3 w-3" />}
-                                onPress={() => openRegPage(reg.slug)}
-                                variant="reg"
-                              />
-                            </>
+                            <Pill
+                              label="Registration"
+                              icon={<ClipboardList className="h-3 w-3" />}
+                              onPress={() => setShowRegsFor({ id: t.id, name: t.name })}
+                              variant="reg"
+                              badge={reg.regCount}
+                            />
                           )}
                           <Pill label="Share" icon={<Share2 className="h-3 w-3" />} onPress={() => onShare(t)} variant="share" />
                           <Pill label="Edit" icon={<Pencil className="h-3 w-3" />} onPress={() => onOpenAction(t, "edit")} variant="edit" />
@@ -317,9 +284,9 @@ export default function MainView({
           <Plus className="h-4 w-4" /> Create
         </button>
       </div>
-      {/* REGISTRATIONS OVERLAY */}
+      {/* REGISTRATION MANAGER */}
       {showRegsFor && (
-        <RegistrationsOverlay
+        <RegistrationManager
           tournamentId={showRegsFor.id}
           tournamentName={showRegsFor.name}
           onClose={() => setShowRegsFor(null)}
