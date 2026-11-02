@@ -144,6 +144,7 @@ export default function RegistrationManager({ tournamentId, tournamentName, onCl
   const [loadingPage, setLoadingPage] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [uploadingQr, setUploadingQr] = useState(false);
 
   // ── Link state ──
   const [copied, setCopied] = useState(false);
@@ -469,7 +470,58 @@ export default function RegistrationManager({ tournamentId, tournamentName, onCl
               {/* Payment */}
               <SectionCard title="Payment">
                 <Field label="UPI ID" value={page.upiId || ""} onChange={v => updateField("upiId", v || null)} placeholder="yourname@upi" />
-                <Field label="QR Code Image URL" value={page.qrImageUrl || ""} onChange={v => updateField("qrImageUrl", v || null)} placeholder="https://..." />
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "rgba(196,181,253,0.4)" }}>QR Code</p>
+                  {page.qrImageUrl ? (
+                    <div className="relative rounded-xl overflow-hidden" style={{ border: "1px solid rgba(139,92,246,0.15)" }}>
+                      <img src={page.qrImageUrl} alt="QR" className="w-full max-h-48 object-contain" style={{ background: "rgba(255,255,255,0.04)" }} />
+                      <label className="absolute inset-0 flex items-center justify-center cursor-pointer transition-all opacity-0 hover:opacity-100" style={{ background: "rgba(0,0,0,0.6)" }}>
+                        <span className="text-xs font-bold text-white px-3 py-1.5 rounded-lg" style={{ background: "rgba(139,92,246,0.5)" }}>Change</span>
+                        <input type="file" accept="image/*" className="sr-only" onChange={async e => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 5 * 1024 * 1024) { toast.error("Max 5 MB"); return; }
+                          setUploadingQr(true);
+                          try {
+                            const fd = new FormData(); fd.append("file", file);
+                            const res = await authFetch("/api/upload", { method: "POST", body: fd });
+                            if (res.ok) { const d = await res.json(); updateField("qrImageUrl", d.url); toast.success("QR updated!"); }
+                            else toast.error("Upload failed");
+                          } catch { toast.error("Upload error"); }
+                          setUploadingQr(false);
+                        }} />
+                      </label>
+                      <button onClick={() => updateField("qrImageUrl", null)} className="absolute top-2 right-2 p-1 rounded-full" style={{ background: "rgba(239,68,68,0.8)" }}>
+                        <X className="h-3 w-3 text-white" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl cursor-pointer transition-all active:scale-[0.98]" style={{ border: "1.5px dashed rgba(139,92,246,0.25)", background: "rgba(139,92,246,0.04)" }}>
+                      {uploadingQr ? (
+                        <p className="text-xs font-semibold" style={{ color: "rgba(196,181,253,0.5)" }}>Uploading...</p>
+                      ) : (
+                        <>
+                          <ImageIcon className="h-6 w-6" style={{ color: "rgba(139,92,246,0.4)" }} />
+                          <p className="text-xs font-semibold" style={{ color: "rgba(196,181,253,0.5)" }}>Tap to upload QR code</p>
+                          <p className="text-[10px]" style={{ color: "rgba(196,181,253,0.3)" }}>PNG, JPG · max 5 MB</p>
+                        </>
+                      )}
+                      <input type="file" accept="image/*" className="sr-only" onChange={async e => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 5 * 1024 * 1024) { toast.error("Max 5 MB"); return; }
+                        setUploadingQr(true);
+                        try {
+                          const fd = new FormData(); fd.append("file", file);
+                          const res = await authFetch("/api/upload", { method: "POST", body: fd });
+                          if (res.ok) { const d = await res.json(); updateField("qrImageUrl", d.url); toast.success("QR uploaded!"); }
+                          else toast.error("Upload failed");
+                        } catch { toast.error("Upload error"); }
+                        setUploadingQr(false);
+                      }} />
+                    </label>
+                  )}
+                </div>
               </SectionCard>
 
               {/* Appearance */}
