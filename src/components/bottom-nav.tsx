@@ -25,7 +25,8 @@ export function BottomNav() {
 
   const tabs = [
     { href: "/", label: "Home", icon: Home },
-    { href: "/wallet", label: "Wallet", icon: Wallet },
+    // Wallet tab hidden for now — wallet-based flow deprecated in favor of registrations
+    // { href: "/wallet", label: "Wallet", icon: Wallet },
   ];
 
   const profileActive = path.startsWith("/profile");

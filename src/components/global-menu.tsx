@@ -21,7 +21,7 @@ export function GlobalMenu() {
 
   const items = [
     { href: "/", icon: <Home className="h-4 w-4" />, label: "Tournaments", desc: "All scrims & matches" },
-    { href: "/wallet", icon: <Wallet className="h-4 w-4" />, label: "Player Wallet", desc: "Dues, advance & entry fees" },
+    // { href: "/wallet", icon: <Wallet className="h-4 w-4" />, label: "Player Wallet", desc: "Dues, advance & entry fees" },
     { href: "/rules", icon: <BookOpen className="h-4 w-4" />, label: "Tournament Rules", desc: "Custom scrim guidelines" },
     { href: "/stats", icon: <Target className="h-4 w-4" />, label: "Match Parser & Stats", desc: "AI paste scores & groups" },
     { href: "/profile", icon: <User className="h-4 w-4" />, label: "Profile & Sync", desc: "Account, plan & sync keys" },
