@@ -6,9 +6,13 @@ const PUBLIC_PATHS = [
   "/login",
   "/pay",
   "/t",
+  "/tournament",
+  "/festival-cup",
   "/api/auth",
   "/api/pay",
   "/api/share",
+  "/api/tournament-pages",
+  "/api/tournament-register",
 ];
 
 export function middleware(req: NextRequest) {

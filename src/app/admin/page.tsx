@@ -246,6 +246,17 @@ export default function AdminPage() {
           >
             <Activity className="h-3.5 w-3.5" /> API Usage
           </button>
+          <button
+            onClick={() => router.push("/admin/tournaments")}
+            className="flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+            style={{
+              background: "transparent",
+              color: "rgba(167,139,250,0.4)",
+              border: "1px solid transparent",
+            }}
+          >
+            🏆 Tournaments
+          </button>
         </div>
 
         {/* Search — only for Users tab */}
