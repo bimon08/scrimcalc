@@ -145,6 +145,7 @@ model TournamentRegistration {
   player3Id     String?        @map("player3_id")
   player4Ign    String?        @map("player4_ign")
   player4Id     String?        @map("player4_id")
+  extraPlayers  Json?          @map("extra_players")     // [{ign: string, id: string}] for players 5+
   utrNumber     String?        @map("utr_number")
   paymentProofUrl String?      @map("payment_proof_url")
   status        String         @default("PENDING")       // PENDING | VERIFIED | REJECTED

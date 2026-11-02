@@ -25,6 +25,7 @@ interface Registration {
   player3Id: string | null;
   player4Ign: string | null;
   player4Id: string | null;
+  extraPlayers: { ign: string; id: string }[] | null;
   utrNumber: string | null;
   paymentProofUrl: string | null;
   status: "PENDING" | "VERIFIED" | "REJECTED";
@@ -373,12 +374,15 @@ export default function RegistrationManager({ tournamentId, tournamentName, onCl
                               {reg.whatsapp && <div><p className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: "rgba(196,181,253,0.35)" }}>WhatsApp</p><p className="text-xs text-white">{reg.whatsapp}</p></div>}
                               {reg.email && <div className="col-span-2"><p className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: "rgba(196,181,253,0.35)" }}>Email</p><p className="text-xs text-white truncate">{reg.email}</p></div>}
                             </div>
-                            {(reg.player2Ign || reg.player3Ign || reg.player4Ign) && (
+                            {(reg.player2Ign || reg.player3Ign || reg.player4Ign || (reg.extraPlayers && reg.extraPlayers.length > 0)) && (
                               <div>
                                 <p className="text-[9px] font-semibold uppercase tracking-wider mb-1" style={{ color: "rgba(196,181,253,0.35)" }}>Squad</p>
                                 <div className="space-y-1">
                                   {[{ ign: reg.player2Ign, id: reg.player2Id }, { ign: reg.player3Ign, id: reg.player3Id }, { ign: reg.player4Ign, id: reg.player4Id }].filter(p => p.ign).map((p, i) => (
                                     <div key={i} className="flex items-center gap-2 text-xs"><span className="text-white">{p.ign}</span>{p.id && <span className="font-mono" style={{ color: "rgba(196,181,253,0.4)" }}>{p.id}</span>}</div>
+                                  ))}
+                                  {reg.extraPlayers?.map((p, i) => (
+                                    <div key={`ex-${i}`} className="flex items-center gap-2 text-xs"><span className="text-white">{p.ign}</span>{p.id && <span className="font-mono" style={{ color: "rgba(196,181,253,0.4)" }}>{p.id}</span>}</div>
                                   ))}
                                 </div>
                               </div>

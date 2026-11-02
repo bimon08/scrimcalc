@@ -233,6 +233,7 @@ export default function TournamentRegistrationPage() {
   const [p2Ign, setP2Ign] = useState(""); const [p2Id, setP2Id] = useState("");
   const [p3Ign, setP3Ign] = useState(""); const [p3Id, setP3Id] = useState("");
   const [p4Ign, setP4Ign] = useState(""); const [p4Id, setP4Id] = useState("");
+  const [extraPlayers, setExtraPlayers] = useState<{ ign: string; id: string }[]>([]);
   const [paymentProof, setPaymentProof] = useState<File | null>(null);
   const [utrNumber, setUtrNumber] = useState("");
   const [showUtrHelp, setShowUtrHelp] = useState(false);
@@ -344,6 +345,7 @@ export default function TournamentRegistrationPage() {
           player3Id: vis(fc, "squadIds") ? p3Id : undefined,
           player4Ign: vis(fc, "squadNames") ? p4Ign : undefined,
           player4Id: vis(fc, "squadIds") ? p4Id : undefined,
+          extraPlayers: extraPlayers.length > 0 ? extraPlayers.filter(p => p.ign.trim()) : undefined,
           utrNumber: vis(fc, "utrNumber") ? utrNumber : undefined,
         }),
       });
@@ -610,6 +612,31 @@ export default function TournamentRegistrationPage() {
                     </div>
                   </div>
                 ))}
+                {/* Extra players (5+) */}
+                {extraPlayers.map((ep, idx) => (
+                  <div key={`extra-${idx}`} className="tp-player-block">
+                    <div className="tp-pb-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span>Player {5 + idx}</span>
+                      <button type="button" onClick={() => setExtraPlayers(prev => prev.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "var(--tp-muted)", fontSize: "12px", cursor: "pointer", padding: "2px 6px" }}>✕</button>
+                    </div>
+                    <div className="tp-row2">
+                      {vis(fc, "squadNames") && (
+                        <input className="tp-fi" placeholder="In-Game Name" value={ep.ign} onChange={e => { const v = e.target.value; setExtraPlayers(prev => prev.map((p, i) => i === idx ? { ...p, ign: v } : p)); }} />
+                      )}
+                      {vis(fc, "squadIds") && (
+                        <input className="tp-fi" placeholder="BGMI ID" value={ep.id} onChange={e => { const v = e.target.value; setExtraPlayers(prev => prev.map((p, i) => i === idx ? { ...p, id: v } : p)); }} />
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setExtraPlayers(prev => [...prev, { ign: "", id: "" }])}
+                  className="tp-add-member-btn"
+                  style={{ width: "100%", padding: "10px", marginTop: "8px", borderRadius: "12px", border: "1.5px dashed var(--tp-border)", background: "transparent", color: "var(--tp-muted)", fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}
+                >
+                  + Add Member
+                </button>
               </div>
             )}
 
@@ -677,7 +704,7 @@ export default function TournamentRegistrationPage() {
                 {vis(fc, "paymentProof") && (
                   <div className="tp-field">
                     <FieldLabel text="Payment Screenshot" fieldKey="paymentProof" fc={fc} />
-                    <FileZone id="pp" label="Upload payment screenshot" hint="Image or PDF · max 10 MB" accept="image/*,.pdf" file={paymentProof} onFile={setPaymentProof} maxMB={10} />
+                    <FileZone id="pp" label="Upload payment screenshot" hint="PNG, JPG · max 10 MB" accept="image/*" file={paymentProof} onFile={setPaymentProof} maxMB={10} />
                   </div>
                 )}
 
