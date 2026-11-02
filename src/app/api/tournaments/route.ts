@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { Tournament, Team } from "@/lib/types";
 import { resolveAuth } from "@/lib/resolveAuth";
+import { uniqueSlug } from "@/lib/slugify";
 
 // GET /api/tournaments — fetch all tournaments for the current user (or collaborator)
 export async function GET(req: Request) {
@@ -94,6 +95,32 @@ export async function PUT(req: Request) {
       });
     })
   );
+
+  // Auto-create TournamentPage for any tournament that doesn't have one yet
+  for (const incoming of tournaments) {
+    const existing = await prisma.tournamentPage.findUnique({
+      where: { savedTournamentId: incoming.id },
+      select: { id: true },
+    });
+    if (!existing) {
+      try {
+        const slug = await uniqueSlug(incoming.name || "tournament");
+        await prisma.tournamentPage.create({
+          data: {
+            slug,
+            name: incoming.name || "Untitled Tournament",
+            userId: caller.userId,
+            savedTournamentId: incoming.id,
+            entryFeeAmount: incoming.entryFee ?? 0,
+            entryFee: incoming.entryFee ? `₹${incoming.entryFee}` : null,
+            themeColor: "#8b5cf6",
+            particleStyle: "sparks",
+            isActive: true,
+          },
+        });
+      } catch { /* slug race condition or other — non-fatal */ }
+    }
+  }
   // Run auto-book logic for any active tournaments
   for (const incoming of tournaments) {
     if (!incoming.isActive) continue;

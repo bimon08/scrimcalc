@@ -25,6 +25,7 @@ model User {
   createdAt       DateTime  @default(now()) @map("created_at")
   wallets         Wallet[]
   savedTournaments SavedTournament[]
+  tournamentPages  TournamentPage[]
 
   @@map("users")
 }
@@ -66,6 +67,7 @@ model SavedTournament {
   isActive    Boolean       @default(false) @map("is_active")
   updatedAt   DateTime      @updatedAt @map("updated_at")
   bookings    SlotBooking[]
+  regPage     TournamentPage?
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("saved_tournaments")
@@ -92,6 +94,8 @@ model TournamentPage {
   id              String    @id @default(uuid())
   slug            String    @unique                    // URL slug e.g. "cherry-blossom-cup"
   name            String                               // Display name e.g. "Cherry Blossom Festival Cup"
+  userId          String?   @map("user_id")            // Owner (null = legacy admin-created)
+  savedTournamentId String? @unique @map("saved_tournament_id") // Linked SavedTournament
   subtitle        String?                              // e.g. "by Jubilant Divine Esports"
   description     String?                              // About section text
   bannerUrl       String?   @map("banner_url")         // Banner image URL
@@ -119,6 +123,8 @@ model TournamentPage {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
   registrations   TournamentRegistration[]
+  user            User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  savedTournament SavedTournament? @relation(fields: [savedTournamentId], references: [id], onDelete: SetNull)
 
   @@map("tournament_pages")
 }
