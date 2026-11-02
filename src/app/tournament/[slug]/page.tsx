@@ -594,49 +594,87 @@ export default function TournamentRegistrationPage() {
               </div>
             )}
 
-            {/* ── STEP: Squad ── */}
             {activeStepKey === "squad" && (
               <div className="tp-form-step">
                 {[{ l: "Player 2", ig: p2Ign, sI: setP2Ign, pi: p2Id, sP: setP2Id },
                   { l: "Player 3", ig: p3Ign, sI: setP3Ign, pi: p3Id, sP: setP3Id },
-                  { l: "Player 4", ig: p4Ign, sI: setP4Ign, pi: p4Id, sP: setP4Id }].map(p => (
+                  { l: "Player 4", ig: p4Ign, sI: setP4Ign, pi: p4Id, sP: setP4Id }].map((p, idx) => (
                   <div key={p.l} className="tp-player-block">
                     <span className="tp-pb-label">{p.l}</span>
                     <div className="tp-row2">
                       {vis(fc, "squadNames") && (
-                        <input className="tp-fi" placeholder="In-Game Name" value={p.ig} onChange={e => p.sI(e.target.value)} />
+                        <input className="tp-fi" placeholder="In-Game Name" value={p.ig}
+                          onChange={e => {
+                            p.sI(e.target.value);
+                            if (idx === 2 && e.target.value.trim() && extraPlayers.length === 0) {
+                              setExtraPlayers([{ ign: "", id: "" }]);
+                            }
+                          }} />
                       )}
                       {vis(fc, "squadIds") && (
-                        <input className="tp-fi" placeholder="BGMI ID" value={p.pi} onChange={e => p.sP(e.target.value)} />
+                        <input className="tp-fi" placeholder="BGMI ID" value={p.pi}
+                          onChange={e => {
+                            p.sP(e.target.value);
+                            if (idx === 2 && e.target.value.trim() && extraPlayers.length === 0 && !vis(fc, "squadNames")) {
+                              setExtraPlayers([{ ign: "", id: "" }]);
+                            }
+                          }} />
                       )}
                     </div>
                   </div>
                 ))}
-                {/* Extra players (5+) */}
                 {extraPlayers.map((ep, idx) => (
-                  <div key={`extra-${idx}`} className="tp-player-block">
+                  <div key={`extra-${idx}`} className="tp-player-block" style={{ animation: "fadeSlideIn 200ms ease" }}>
                     <div className="tp-pb-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <span>Player {5 + idx}</span>
-                      <button type="button" onClick={() => setExtraPlayers(prev => prev.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "var(--tp-muted)", fontSize: "12px", cursor: "pointer", padding: "2px 6px" }}>✕</button>
+                      <button type="button" onClick={() => setExtraPlayers(prev => prev.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "var(--tp-muted)", fontSize: "12px", cursor: "pointer", padding: "2px 6px", opacity: 0.6 }}>✕</button>
                     </div>
                     <div className="tp-row2">
                       {vis(fc, "squadNames") && (
-                        <input className="tp-fi" placeholder="In-Game Name" value={ep.ign} onChange={e => { const v = e.target.value; setExtraPlayers(prev => prev.map((p, i) => i === idx ? { ...p, ign: v } : p)); }} />
+                        <input className="tp-fi" placeholder="In-Game Name" value={ep.ign}
+                          onChange={e => {
+                            const v = e.target.value;
+                            setExtraPlayers(prev => prev.map((p, i) => i === idx ? { ...p, ign: v } : p));
+                            if (idx === extraPlayers.length - 1 && v.trim()) {
+                              setExtraPlayers(prev => [...prev, { ign: "", id: "" }]);
+                            }
+                          }}
+                          onBlur={() => {
+                            setExtraPlayers(prev => {
+                              const cleaned = [...prev];
+                              while (cleaned.length > 0 && !cleaned[cleaned.length - 1].ign.trim() && !cleaned[cleaned.length - 1].id.trim()) {
+                                cleaned.pop();
+                              }
+                              return cleaned;
+                            });
+                          }}
+                        />
                       )}
                       {vis(fc, "squadIds") && (
-                        <input className="tp-fi" placeholder="BGMI ID" value={ep.id} onChange={e => { const v = e.target.value; setExtraPlayers(prev => prev.map((p, i) => i === idx ? { ...p, id: v } : p)); }} />
+                        <input className="tp-fi" placeholder="BGMI ID" value={ep.id}
+                          onChange={e => {
+                            const v = e.target.value;
+                            setExtraPlayers(prev => prev.map((p, i) => i === idx ? { ...p, id: v } : p));
+                            if (!vis(fc, "squadNames") && idx === extraPlayers.length - 1 && v.trim()) {
+                              setExtraPlayers(prev => [...prev, { ign: "", id: "" }]);
+                            }
+                          }}
+                          onBlur={() => {
+                            if (!vis(fc, "squadNames")) {
+                              setExtraPlayers(prev => {
+                                const cleaned = [...prev];
+                                while (cleaned.length > 0 && !cleaned[cleaned.length - 1].ign.trim() && !cleaned[cleaned.length - 1].id.trim()) {
+                                  cleaned.pop();
+                                }
+                                return cleaned;
+                              });
+                            }
+                          }}
+                        />
                       )}
                     </div>
                   </div>
                 ))}
-                <button
-                  type="button"
-                  onClick={() => setExtraPlayers(prev => [...prev, { ign: "", id: "" }])}
-                  className="tp-add-member-btn"
-                  style={{ width: "100%", padding: "10px", marginTop: "8px", borderRadius: "12px", border: "1.5px dashed var(--tp-border)", background: "transparent", color: "var(--tp-muted)", fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}
-                >
-                  + Add Member
-                </button>
               </div>
             )}
 

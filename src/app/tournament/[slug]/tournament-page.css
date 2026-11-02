@@ -1206,3 +1206,9 @@ body:has(.tp-page) nav.fixed {
   border-color: rgba(250, 204, 21, 0.35) !important;
   transition: all 0.2s ease;
 }
+
+/* ── Fade-slide animation for auto-added player rows ── */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
