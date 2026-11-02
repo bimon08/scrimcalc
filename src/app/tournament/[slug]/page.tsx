@@ -324,10 +324,35 @@ export default function TournamentRegistrationPage() {
     return hints;
   };
 
+  const uploadFile = async (file: File, folder: string): Promise<string | null> => {
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("folder", folder);
+      const res = await fetch("/api/upload/public", { method: "POST", body: fd });
+      if (res.ok) { const d = await res.json(); return d.url; }
+    } catch { /* silent */ }
+    return null;
+  };
+
   const handleSubmit = async () => {
     if (!config) return;
     setSubmitting(true);
     try {
+      // Upload files first
+      let paymentProofUrl: string | undefined;
+      let teamLogoUrl: string | undefined;
+
+      if (paymentProof) {
+        const url = await uploadFile(paymentProof, `payments/${config.slug}`);
+        if (!url) { toast.error("Failed to upload payment screenshot"); setSubmitting(false); return; }
+        paymentProofUrl = url;
+      }
+      if (teamLogo) {
+        const url = await uploadFile(teamLogo, `logos/${config.slug}`);
+        if (url) teamLogoUrl = url;
+      }
+
       const res = await fetch("/api/tournament-register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -335,6 +360,7 @@ export default function TournamentRegistrationPage() {
           tournamentSlug: config.slug,
           state: vis(fc, "state") ? state : undefined,
           teamName,
+          teamLogoUrl,
           iglName,
           iglId: vis(fc, "iglId") ? iglId : undefined,
           whatsapp: vis(fc, "whatsapp") ? whatsapp : undefined,
@@ -347,6 +373,7 @@ export default function TournamentRegistrationPage() {
           player4Id: vis(fc, "squadIds") ? p4Id : undefined,
           extraPlayers: extraPlayers.length > 0 ? extraPlayers.filter(p => p.ign.trim()) : undefined,
           utrNumber: vis(fc, "utrNumber") ? utrNumber : undefined,
+          paymentProofUrl,
         }),
       });
       if (!res.ok) {
