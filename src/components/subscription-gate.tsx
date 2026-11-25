@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { X, Sparkles, LogIn, Check } from "lucide-react";
 
@@ -11,15 +11,40 @@ interface Props {
   onClose: () => void;
 }
 
-const PLANS = [
-  { id: "1w", duration: "1 Week", price: "₹50", popular: false, badge: "" },
-  { id: "1m", duration: "1 Month", price: "₹150", popular: true, badge: "POPULAR" },
-  { id: "1y", duration: "1 Year", price: "₹1,500", popular: false, badge: "BEST VALUE" },
-];
+// Automatically switch plans from ₹50/₹150/₹1,500 to ₹60/₹180/₹1,800 on Dec 1, 2026 (IST)
+const PRICE_INCREASE_AT = new Date("2026-12-01T00:00:00+05:30").getTime();
+
+function getPlans(now: number) {
+  const isNewPricing = now >= PRICE_INCREASE_AT;
+  if (isNewPricing) {
+    return [
+      { id: "1w", duration: "1 Week", price: "₹60", originalPrice: "₹75", discount: "20% OFF", popular: false, badge: "" },
+      { id: "1m", duration: "1 Month", price: "₹180", originalPrice: "₹240", discount: "25% OFF", popular: true, badge: "POPULAR" },
+      { id: "1y", duration: "1 Year", price: "₹1,800", originalPrice: "₹2,160", discount: "2 MO FREE", popular: false, badge: "BEST VALUE" },
+    ];
+  }
+  return [
+    { id: "1w", duration: "1 Week", price: "₹50", originalPrice: "₹60", discount: "17% OFF", popular: false, badge: "" },
+    { id: "1m", duration: "1 Month", price: "₹150", originalPrice: "₹200", discount: "25% OFF", popular: true, badge: "POPULAR" },
+    { id: "1y", duration: "1 Year", price: "₹1,500", originalPrice: "₹1,800", discount: "2 MO FREE", popular: false, badge: "BEST VALUE" },
+  ];
+}
 
 export default function SubscriptionNudge({ userName, userEmail, isLoggedIn = true, onClose }: Props) {
+  const [now, setNow] = useState(() => Date.now());
   const [selectedPlanId, setSelectedPlanId] = useState("1m");
-  const selectedPlan = PLANS.find((p) => p.id === selectedPlanId) || PLANS[1];
+
+  useEffect(() => {
+    const msUntilChange = PRICE_INCREASE_AT - Date.now();
+    if (msUntilChange <= 0) return;
+    // Schedule an update if the tab stays open across the Dec 1 cutoff (cap at 24h to avoid 32-bit timer overflow)
+    const delay = Math.min(msUntilChange, 24 * 60 * 60 * 1000);
+    const timer = setTimeout(() => setNow(Date.now()), delay);
+    return () => clearTimeout(timer);
+  }, [now]);
+
+  const plans = getPlans(now);
+  const selectedPlan = plans.find((p) => p.id === selectedPlanId) || plans[1];
 
   const whatsappMessage = `Hi, I'd like to subscribe to ScrimCalc.\n\nName: ${userName ?? "—"}\nEmail: ${userEmail ?? "—"}\nPlan: ${selectedPlan.duration} (${selectedPlan.price})\n\nPlease send the payment details.`;
   const whatsappLink = `https://wa.me/918837011018?text=${encodeURIComponent(whatsappMessage)}`;
@@ -77,7 +102,7 @@ export default function SubscriptionNudge({ userName, userEmail, isLoggedIn = tr
 
             {/* Plans List */}
             <div className="space-y-2">
-              {PLANS.map((plan) => {
+              {plans.map((plan) => {
                 const isSelected = plan.id === selectedPlanId;
                 return (
                   <button
@@ -123,8 +148,25 @@ export default function SubscriptionNudge({ userName, userEmail, isLoggedIn = tr
                           {plan.badge || "POPULAR"}
                         </span>
                       )}
+                      {plan.discount && (
+                        <span
+                          className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider"
+                          style={{
+                            background: "rgba(245,158,11,0.16)",
+                            color: "#fbbf24",
+                            border: "1px solid rgba(245,158,11,0.35)",
+                          }}
+                        >
+                          {plan.discount}
+                        </span>
+                      )}
                     </div>
-                    <span className="text-sm font-black text-violet-300">{plan.price}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[11px] font-semibold line-through" style={{ color: "rgba(196,181,253,0.4)" }}>
+                        {plan.originalPrice}
+                      </span>
+                      <span className="text-sm font-black text-violet-300">{plan.price}</span>
+                    </div>
                   </button>
                 );
               })}

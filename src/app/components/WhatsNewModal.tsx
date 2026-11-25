@@ -74,8 +74,8 @@ export default function WhatsNewModal({ onClose }: Props) {
             </p>
             <p>
               Starting <span className="font-semibold text-white">Dec 1</span>,
-              plans will move from{" "}
-              <span className="font-semibold text-white">₹50 → ₹60</span> to
+              plans will adjust (starting{" "}
+              <span className="font-semibold text-white">₹50 → ₹60</span>) to
               support the upgraded model and infrastructure.
             </p>
             <p className="text-xs" style={{ color: "rgba(191,219,254,0.7)" }}>
