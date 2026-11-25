@@ -9,7 +9,7 @@ import {
   CollabDeleteConfirm, TeamEditScreen, PointSystemModal, EditSheet,
   AddTeamsScreen, AdvancedScreen, SplitScreen, StandingsModal,
   SlotsModal, RoomInfoModal, CalculateScreen, MainView, RulesModal,
-  MatchEditOverlay,
+  MatchEditOverlay, WhatsNewModal, WHATS_NEW_STORAGE_KEY,
 } from "./components";
 import { useCloudSync } from "./hooks/useCloudSync";
 import { useSubscription } from "./hooks/useSubscription";
@@ -164,6 +164,20 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
   const [showSplit, setShowSplit] = useState(false);
   const [showMatchEdit, setShowMatchEdit] = useState(false);
   const [groupFilter, setGroupFilter] = useState<string>("all");
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(WHATS_NEW_STORAGE_KEY)) {
+        setShowWhatsNew(true);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const dismissWhatsNew = useCallback(() => {
+    setShowWhatsNew(false);
+    try { localStorage.setItem(WHATS_NEW_STORAGE_KEY, "1"); } catch { /* ignore */ }
+  }, []);
 
   // Tracks whether we've pushed a history entry for the current overlay session.
   // We only ever want ONE entry pushed per session so one back-press closes it.
@@ -998,6 +1012,9 @@ function AuthenticatedApp({ session }: { session: ReturnType<typeof useSession>[
       {showRulesModal && tournament && (
         <RulesModal tournament={tournament} save={save} onClose={() => setShowRulesModal(false)} />
       )}
+
+      {/* WHAT'S NEW / HEADS-UP MODAL */}
+      {showWhatsNew && <WhatsNewModal onClose={dismissWhatsNew} />}
 
       {/* SUBSCRIPTION NUDGE */}
       {sub.showNudge && (

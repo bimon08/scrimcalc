@@ -61,6 +61,7 @@ export async function POST(req: Request) {
 
     const prompt = generateDirectPrompt(teams);
     const models = [
+      "gemini-4-hydrogen",
       "gemini-3.8-flash",
       "gemini-3.7-flash",
       "gemini-3.6-flash",

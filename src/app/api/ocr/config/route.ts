@@ -28,6 +28,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     key,
     models: [
+      "gemini-4-hydrogen",
       "gemini-3.8-flash",
       "gemini-3.7-flash",
       "gemini-3.6-flash",
